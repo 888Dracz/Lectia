@@ -1,0 +1,25 @@
+name: CI
+
+# Verifica cada pull request y cada push a la rama principal.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - name: Tests
+        run: npm test
+      - name: Typecheck + build
+        run: npm run build

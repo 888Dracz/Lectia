@@ -73,6 +73,20 @@ npm run preview    # sirve el build de producción
 Los datos se guardan **solo en el dispositivo** (localStorage). La app arranca
 con datos de demostración; desde *Perfil* se pueden recargar o borrar.
 
+## 🚢 Despliegue automático
+
+Cada vez que se fusiona a `main`, GitHub Actions **construye y publica la app
+automáticamente** en GitHub Pages (`.github/workflows/deploy.yml`):
+
+1. Instala dependencias, corre los tests y hace el build de producción.
+2. Publica `dist/` en GitHub Pages.
+
+URL de producción: `https://dracz888.github.io/campanita/`
+
+Además, `.github/workflows/ci.yml` corre tests + typecheck + build en cada
+pull request. Requiere tener habilitado **Settings → Pages → Source: GitHub
+Actions** (el workflow intenta habilitarlo solo la primera vez).
+
 ## 🧭 Estado y próximos pasos
 
 Esta v1 cubre los 3 módulos y la capa de integración con datos locales. La
