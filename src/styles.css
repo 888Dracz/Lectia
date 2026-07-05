@@ -1,0 +1,537 @@
+:root {
+  --bg: #fdf7f9;
+  --surface: #ffffff;
+  --surface-2: #fbeef3;
+  --ink: #2a2230;
+  --ink-soft: #6b5f6e;
+  --line: #f0dfe7;
+  --brand: #b03a6e;
+  --brand-soft: #f3d7e3;
+  --shadow: 0 6px 24px rgba(120, 40, 80, 0.08);
+  --radius: 18px;
+
+  /* Colores por fase */
+  --menstrual: #d24b6a;
+  --menstrual-bg: #fbe0e6;
+  --folicular: #3a9b8f;
+  --folicular-bg: #d8f0eb;
+  --ovulatoria: #d9922b;
+  --ovulatoria-bg: #fbecd2;
+  --lutea: #7a5cc4;
+  --lutea-bg: #e7defb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a151d;
+    --surface: #251d29;
+    --surface-2: #2f2434;
+    --ink: #f3ecf1;
+    --ink-soft: #b3a5b7;
+    --line: #3a2e40;
+    --brand: #e88bb2;
+    --brand-soft: #4a2a3b;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    --menstrual-bg: #3d2029;
+    --folicular-bg: #16332e;
+    --ovulatoria-bg: #3a2c14;
+    --lutea-bg: #2a2140;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+#root {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  position: relative;
+}
+
+/* ---------- Layout ---------- */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.app-header {
+  padding: 20px 20px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-header h1 {
+  font-size: 20px;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app-header .logo {
+  font-size: 26px;
+}
+
+.app-header .subtitle {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.content {
+  flex: 1;
+  padding: 4px 16px 96px;
+}
+
+/* ---------- Bottom nav ---------- */
+.tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
+  z-index: 20;
+}
+
+.tabbar button {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: inherit;
+}
+
+.tabbar button .ico {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.tabbar button.active {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+  border: 1px solid var(--line);
+}
+
+.card h2,
+.card h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.card .eyebrow {
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.muted {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* ---------- Phase hero ---------- */
+.hero {
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 14px;
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.hero .day {
+  font-size: 13px;
+  opacity: 0.85;
+  font-weight: 600;
+}
+
+.hero .phase-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 2px 0 6px;
+  text-transform: capitalize;
+}
+
+.hero .headline {
+  font-size: 14.5px;
+  font-weight: 500;
+}
+
+.phase-menstrual {
+  background: var(--menstrual-bg);
+  border: 1px solid color-mix(in srgb, var(--menstrual) 30%, transparent);
+}
+.phase-folicular {
+  background: var(--folicular-bg);
+  border: 1px solid color-mix(in srgb, var(--folicular) 30%, transparent);
+}
+.phase-ovulatoria {
+  background: var(--ovulatoria-bg);
+  border: 1px solid color-mix(in srgb, var(--ovulatoria) 30%, transparent);
+}
+.phase-lutea {
+  background: var(--lutea-bg);
+  border: 1px solid color-mix(in srgb, var(--lutea) 30%, transparent);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+}
+
+.pill.warn {
+  background: var(--ovulatoria-bg);
+  color: var(--ovulatoria);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot-menstrual { background: var(--menstrual); }
+.dot-folicular { background: var(--folicular); }
+.dot-ovulatoria { background: var(--ovulatoria); }
+.dot-lutea { background: var(--lutea); }
+
+/* ---------- Rows / metrics ---------- */
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.metric {
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 14px;
+}
+
+.metric .num {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.metric .lbl {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+
+/* ---------- Bars ---------- */
+.bar-track {
+  flex: 1;
+  background: var(--surface-2);
+  border-radius: 999px;
+  height: 9px;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--brand);
+}
+
+.barline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.barline .label {
+  width: 84px;
+  font-size: 12.5px;
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+.barline .val {
+  width: 34px;
+  text-align: right;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+/* ---------- Controls ---------- */
+button.btn {
+  font-family: inherit;
+  border: none;
+  background: var(--brand);
+  color: #fff;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+}
+
+button.btn.secondary {
+  background: var(--surface-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+button.btn.ghost {
+  background: none;
+  color: var(--brand);
+  border: 1px solid var(--brand-soft);
+}
+
+button.btn:active {
+  transform: scale(0.99);
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+label {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-weight: 600;
+  margin: 12px 0 4px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+/* ---------- Mood selector ---------- */
+.mood-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.mood-btn {
+  flex: 1;
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 14px;
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s;
+}
+
+.mood-btn.selected {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  transform: scale(1.05);
+}
+
+/* ---------- Chips (symptoms) ---------- */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.chip {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.chip.on {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+/* ---------- Calendar strip ---------- */
+.strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 0 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.strip .cell {
+  flex: 0 0 auto;
+  width: 42px;
+  text-align: center;
+  border-radius: 12px;
+  padding: 8px 0;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.strip .cell.today {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.strip .cell .d {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.strip .cell .m {
+  font-size: 9.5px;
+  color: var(--ink-soft);
+}
+
+.strip .cell .ph {
+  margin: 4px auto 0;
+}
+
+/* ---------- List ---------- */
+.list-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.list-item:last-child {
+  border-bottom: none;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--brand);
+  font-size: 12.5px;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px;
+}
+
+.danger {
+  color: var(--menstrual);
+}
+
+pre.report {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  background: var(--surface-2);
+  padding: 14px;
+  border-radius: 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+
+.spacer {
+  height: 4px;
+}
+
+.center {
+  text-align: center;
+}
+
+.empty {
+  text-align: center;
+  color: var(--ink-soft);
+  padding: 24px 12px;
+  font-size: 13px;
+}
