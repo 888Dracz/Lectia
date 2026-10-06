@@ -1,10 +1,10 @@
-# 📚✨ Campanita · Lector
+# 📚✨ Lectia · Lector
 
 Lector de libros **para el celular**, inspirado en Moon+ Reader, con lectura
 rápida, minijuegos para leer mejor, biblioteca con estanterías y respaldo
 completo. Funciona sin conexión y se instala como una app más (PWA).
 
-**Abrir la app:** <https://dracz888.github.io/campanita/>
+**Abrir la app:** <https://888dracz.github.io/lectia/>
 (se publica sola cada vez que se fusiona a `main`).
 
 ## Qué puede hacer
@@ -31,7 +31,7 @@ completo. Funciona sin conexión y se instala como una app más (PWA).
 - Filtros (leyendo, por leer, terminados, favoritos) y **estanterías propias**.
 - Tarjeta “Continuar leyendo” con el tiempo estimado para terminar.
 - Agregar libros desde el selector de archivos, arrastrándolos (computadora) o con
-  **Compartir → Campanita** desde otras apps de Android (con la app instalada).
+  **Compartir → Lectia** desde otras apps de Android (con la app instalada).
 
 ### ⚡ Entrenar (dinámica de juegos)
 - **Lectura rápida (RSVP)**: palabra a palabra con letra de enfoque, de 100 a 1200 ppm,
@@ -60,7 +60,7 @@ En **Ajustes → Respaldo**:
 
 ## Instalar en el celular
 
-1. Abre <https://dracz888.github.io/campanita/> en Chrome (Android) o Safari (iPhone).
+1. Abre <https://888dracz.github.io/lectia/> en Chrome (Android) o Safari (iPhone).
 2. Android: menú ⋮ → **Instalar app** (o “Agregar a la pantalla principal”).
    iPhone: botón Compartir → **Agregar a inicio**.
 3. Ábrela desde su ícono: funciona sin conexión y en Android aparece en el menú
@@ -75,7 +75,7 @@ npm install
 npm run dev        # servidor de desarrollo (http://localhost:5173)
 npm test           # pruebas (vitest)
 npm run build      # typecheck + build de producción en dist/
-npm run preview    # sirve el build en http://localhost:4173/campanita/
+npm run preview    # sirve el build en http://localhost:4173/lectia/
 ```
 
 ### Estructura
@@ -93,7 +93,7 @@ src/
     games/        # Pantalla Entrenar y minijuegos
     progress/     # Estadísticas y logros
     settings/     # Ajustes y respaldo
-  sw.ts           # Service worker: sin conexión + "Compartir → Campanita"
+  sw.ts           # Service worker: sin conexión + "Compartir → Lectia"
   styles/         # Sistema de diseño (temas claro/oscuro, colores de acento)
 ```
 

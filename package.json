@@ -1,8 +1,8 @@
 {
-  "name": "campanita",
+  "name": "lectia",
   "version": "1.0.0",
   "private": true,
-  "description": "Campanita: lector de libros para el celular (PDF, EPUB, Word, TXT…) con lectura rápida, minijuegos, biblioteca y respaldo.",
+  "description": "Lectia: lector de libros para el celular (PDF, EPUB, Word, TXT…) con lectura rápida, minijuegos, biblioteca y respaldo.",
   "type": "module",
   "scripts": {
     "assets": "node scripts/copy-pdfjs-assets.mjs",

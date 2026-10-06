@@ -30,11 +30,11 @@ export async function addWelcomeBook(): Promise<void> {
     return;
   }
   // Se valida que el Markdown se interprete bien antes de guardarlo.
-  markdownToBook(WELCOME_BOOK, "Guía de Campanita").content.dispose();
-  const file = new File([WELCOME_BOOK], "Guía de Campanita.md", { type: "text/markdown" });
+  markdownToBook(WELCOME_BOOK, "Guía de Lectia").content.dispose();
+  const file = new File([WELCOME_BOOK], "Guía de Lectia.md", { type: "text/markdown" });
   useUi.getState().setBusy("Preparando la guía…");
   try {
-    const res = await importFiles([file], undefined, { sample: true, author: "Campanita" });
+    const res = await importFiles([file], undefined, { sample: true, author: "Lectia" });
     if (res.added[0]) toast("¡Listo! Ábrela para empezar", { tone: "success" });
   } finally {
     useUi.getState().setBusy(null);

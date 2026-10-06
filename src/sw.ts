@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 // Service worker: guarda la app para usarla sin conexión y recibe los
-// archivos que se comparten con Campanita desde otras apps del teléfono.
+// archivos que se comparten con Lectia desde otras apps del teléfono.
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from "workbox-precaching";
 import { NavigationRoute, registerRoute } from "workbox-routing";
 import { CacheFirst } from "workbox-strategies";
@@ -29,7 +29,7 @@ registerRoute(
   new CacheFirst({ cacheName: "fonts", plugins: [new ExpirationPlugin({ maxEntries: 120 })] })
 );
 
-// Web Share Target: "Compartir → Campanita" en Android.
+// Web Share Target: "Compartir → Lectia" en Android.
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "POST" || url.pathname !== `${BASE}compartir`) return;

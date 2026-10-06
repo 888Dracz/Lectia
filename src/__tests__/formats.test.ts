@@ -81,8 +81,8 @@ describe("TXT y Markdown", () => {
   });
 
   it("Markdown se divide por los encabezados que se repiten", () => {
-    const { content, info } = markdownToBook("# Guía\n\nAutor: Campanita\n\n## Uno\n\nTexto.\n\n## Dos\n\nMás.", "x");
-    expect(info).toMatchObject({ title: "Guía", author: "Campanita" });
+    const { content, info } = markdownToBook("# Guía\n\nAutor: Lectia\n\n## Uno\n\nTexto.\n\n## Dos\n\nMás.", "x");
+    expect(info).toMatchObject({ title: "Guía", author: "Lectia" });
     if (content.kind !== "reflow") throw new Error("tipo");
     expect(content.chapters.map((c) => c.title)).toEqual(["Inicio", "Uno", "Dos"]);
   });

@@ -1,5 +1,5 @@
 // Textos para entrenar: fragmentos clásicos de dominio público, textos propios
-// de Campanita o el libro que estés leyendo.
+// de Lectia o el libro que estés leyendo.
 import { openBookContent } from "../books/load";
 import type { BookMeta } from "../books/types";
 
@@ -33,7 +33,7 @@ export const CLASSICS: TrainingText[] = [
   },
   {
     title: "La biblioteca del faro",
-    author: "Textos de Campanita",
+    author: "Textos de Lectia",
     text:
       "En lo alto de un acantilado había un faro que, en lugar de guardar aceite y herramientas, guardaba libros. " +
       "La farera subía cada tarde los ciento doce escalones con una lámpara en una mano y una novela en la otra. " +
@@ -47,7 +47,7 @@ export const CLASSICS: TrainingText[] = [
   },
   {
     title: "Cómo leen los ojos",
-    author: "Textos de Campanita",
+    author: "Textos de Lectia",
     text:
       "Cuando leemos, los ojos no se deslizan suavemente sobre la línea, como podríamos pensar. " +
       "En realidad avanzan a saltos rápidos llamados movimientos sacádicos, y se detienen un instante en ciertos puntos que se conocen como fijaciones. " +
@@ -61,7 +61,7 @@ export const CLASSICS: TrainingText[] = [
   },
   {
     title: "Breve historia del libro",
-    author: "Textos de Campanita",
+    author: "Textos de Lectia",
     text:
       "Antes de los libros hubo tablillas de arcilla, rollos de papiro y pergaminos hechos con piel de animales. " +
       "Los romanos empezaron a coser hojas por un lado y así nació el códice, el antepasado directo del libro que conocemos. " +
@@ -74,7 +74,7 @@ export const CLASSICS: TrainingText[] = [
   },
   {
     title: "El bosque de las palabras",
-    author: "Textos de Campanita",
+    author: "Textos de Lectia",
     text:
       "Había una vez un bosque donde los árboles, en lugar de hojas, tenían palabras. " +
       "En primavera brotaban verbos nuevos que se movían con el viento, y en otoño caían adjetivos dorados que crujían bajo los pies. " +

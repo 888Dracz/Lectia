@@ -9,7 +9,7 @@ export interface InboxItem {
   receivedAt: number;
 }
 
-interface CampanitaDB extends DBSchema {
+interface LectiaDB extends DBSchema {
   files: { key: string; value: Blob };
   covers: { key: string; value: Blob };
   kv: { key: string; value: unknown };
@@ -19,11 +19,11 @@ interface CampanitaDB extends DBSchema {
 const DB_NAME = "campanita";
 const DB_VERSION = 1;
 
-let dbPromise: Promise<IDBPDatabase<CampanitaDB>> | null = null;
+let dbPromise: Promise<IDBPDatabase<LectiaDB>> | null = null;
 
-export function getDb(): Promise<IDBPDatabase<CampanitaDB>> {
+export function getDb(): Promise<IDBPDatabase<LectiaDB>> {
   if (!dbPromise) {
-    dbPromise = openDB<CampanitaDB>(DB_NAME, DB_VERSION, {
+    dbPromise = openDB<LectiaDB>(DB_NAME, DB_VERSION, {
       upgrade(db) {
         if (!db.objectStoreNames.contains("files")) db.createObjectStore("files");
         if (!db.objectStoreNames.contains("covers")) db.createObjectStore("covers");

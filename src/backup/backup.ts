@@ -1,5 +1,5 @@
 // Respaldo completo de la app en un archivo .zip:
-//   campanita.json  → biblioteca, estanterías, marcadores, subrayados, ajustes y progreso
+//   lectia.json     → biblioteca, estanterías, marcadores, subrayados, ajustes y progreso
 //   libros/<id>     → archivos originales de los libros (opcional)
 //   portadas/<id>   → portadas
 import { strFromU8, strToU8, unzip, zip, type Unzipped, type Zippable } from "fflate";
@@ -13,7 +13,7 @@ export function markBackupDone(): void {
   useStore.getState().setApp({ lastBackupAt: Date.now() });
 }
 
-export const BACKUP_APP = "campanita-lector";
+export const BACKUP_APP = "lectia";
 export const BACKUP_FORMAT = 1;
 
 export interface BackupManifest {
@@ -38,7 +38,7 @@ function unzipAsync(data: Uint8Array): Promise<Unzipped> {
 }
 
 export function backupFileName(includeFiles: boolean, date = new Date()): string {
-  return `campanita-${includeFiles ? "respaldo" : "datos"}-${dayKey(date)}.zip`;
+  return `lectia-${includeFiles ? "respaldo" : "datos"}-${dayKey(date)}.zip`;
 }
 
 /** Arma el JSON del respaldo (puro, para poder probarlo). */
@@ -64,11 +64,11 @@ export async function createBackup(
   const now = Date.now();
   const json = buildBackupJson({ ...state, app: { ...state.app, lastBackupAt: now } }, includeFiles, now);
   const files: Zippable = {
-    "campanita.json": [strToU8(JSON.stringify(json, null, 1)), { level: 6 }],
+    "lectia.json": [strToU8(JSON.stringify(json, null, 1)), { level: 6 }],
     "LEEME.txt": [
       strToU8(
-        "Respaldo de Campanita · Lector.\n" +
-          "Para restaurarlo: abre Campanita → Ajustes → Restaurar respaldo y elige este archivo.\n" +
+        "Respaldo de Lectia · Lector.\n" +
+          "Para restaurarlo: abre Lectia → Ajustes → Restaurar respaldo y elige este archivo.\n" +
           "La carpeta libros/ contiene tus archivos originales.\n"
       ),
       { level: 6 },
@@ -103,17 +103,18 @@ export function parseBackupJson(text: string): BackupJson {
     throw new Error("El respaldo está dañado (JSON inválido).");
   }
   const j = raw as Partial<BackupJson>;
-  if (!j?.manifest || j.manifest.app !== BACKUP_APP) throw new Error("Este archivo no es un respaldo de Campanita.");
+  if (!j?.manifest || (j.manifest.app !== BACKUP_APP && j.manifest.app !== "campanita-lector")) throw new Error("Este archivo no es un respaldo de Lectia.");
   if (j.manifest.format > BACKUP_FORMAT) throw new Error("El respaldo es de una versión más nueva de la app. Actualízala primero.");
   return { manifest: j.manifest, state: migrateState(j.state) };
 }
 
 export async function readBackup(file: Blob): Promise<ParsedBackup> {
   const entries = await unzipAsync(new Uint8Array(await file.arrayBuffer())).catch(() => {
-    throw new Error("No se pudo leer el archivo. ¿Es un .zip de respaldo de Campanita?");
+    throw new Error("No se pudo leer el archivo. ¿Es un .zip de respaldo de Lectia?");
   });
-  const jsonBytes = entries["campanita.json"];
-  if (!jsonBytes) throw new Error("Este archivo no es un respaldo de Campanita.");
+  // También acepta respaldos hechos con la app anterior (Campanita).
+  const jsonBytes = entries["lectia.json"] ?? entries["campanita.json"];
+  if (!jsonBytes) throw new Error("Este archivo no es un respaldo de Lectia.");
   const json = parseBackupJson(strFromU8(jsonBytes));
   const files = new Map<string, Uint8Array>();
   const covers = new Map<string, Uint8Array>();

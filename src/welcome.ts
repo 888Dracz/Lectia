@@ -1,13 +1,13 @@
 // Libro de bienvenida: una guía corta de la app, en Markdown.
-export const WELCOME_BOOK = `# Guía de Campanita
+export const WELCOME_BOOK = `# Guía de Lectia
 
-Autor: Campanita
+Autor: Lectia
 
 ## Bienvenida
 
 Hola. Este pequeño libro vive en tu biblioteca para que pruebes el lector sin tener que buscar nada. Puedes borrarlo cuando quieras desde la biblioteca, manteniendo pulsada su portada.
 
-Campanita es un lector pensado para el celular. Abre **PDF, EPUB, Word (.docx), TXT, Markdown, HTML, FB2** y cómics **CBZ**. Todo se guarda en tu propio teléfono: nada se sube a internet.
+Lectia es un lector pensado para el celular. Abre **PDF, EPUB, Word (.docx), TXT, Markdown, HTML, FB2** y cómics **CBZ**. Todo se guarda en tu propio teléfono: nada se sube a internet.
 
 Además de leer, puedes entrenar tu velocidad de lectura con la lectura rápida y con minijuegos que usan el texto de tus propios libros. Cada minuto de lectura suma *polvo de hadas* ✨, la experiencia que te hace subir de nivel.
 

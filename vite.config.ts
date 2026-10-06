@@ -17,9 +17,10 @@ const BOOK_TYPES = {
   "application/vnd.comicbook+zip": [".cbz"],
 };
 
-// En producción la app se publica en GitHub Pages bajo /campanita/.
+// En producción se publica en GitHub Pages bajo /<repositorio>/ (p. ej. /lectia/).
+const repoName = process.env.GITHUB_REPOSITORY?.split("/")[1] ?? "lectia";
 export default defineConfig(({ command, isPreview }) => {
-  const base = command === "build" || isPreview ? "/campanita/" : "/";
+  const base = command === "build" || isPreview ? `/${repoName}/` : "/";
   return {
     base,
     define: {
@@ -36,8 +37,8 @@ export default defineConfig(({ command, isPreview }) => {
         includeAssets: ["icon.svg", "apple-touch-icon.png"],
         manifest: {
           id: base,
-          name: "Campanita · Lector",
-          short_name: "Campanita",
+          name: "Lectia · Lector",
+          short_name: "Lectia",
           description: "Lee PDF, EPUB, Word y más en tu celular. Biblioteca, lectura rápida, minijuegos y respaldo.",
           lang: "es",
           dir: "ltr",

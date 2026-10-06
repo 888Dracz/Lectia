@@ -73,7 +73,7 @@ export function App() {
   if (!hydrated) {
     return (
       <div className="splash">
-        <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="Campanita" />
+        <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="Lectia" />
       </div>
     );
   }

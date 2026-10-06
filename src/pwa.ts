@@ -1,5 +1,5 @@
 // Instalación como app (PWA), actualizaciones y archivos recibidos desde
-// otras apps ("Compartir → Campanita") o abiertos con la app instalada.
+// otras apps ("Compartir → Lectia") o abiertos con la app instalada.
 import { useSyncExternalStore } from "react";
 import { registerSW } from "virtual:pwa-register";
 import { takeInbox } from "./lib/db";

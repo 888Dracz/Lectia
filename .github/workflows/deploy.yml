@@ -1,7 +1,7 @@
 name: Publicar en GitHub Pages
 
 # Al fusionar a main se construye la app y se publica en
-# https://dracz888.github.io/campanita/ (también se puede lanzar a mano).
+# https://888dracz.github.io/lectia/ (también se puede lanzar a mano).
 on:
   push:
     branches: [main]

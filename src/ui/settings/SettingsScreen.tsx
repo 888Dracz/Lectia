@@ -130,7 +130,7 @@ export function SettingsScreen() {
     <div className="screen settings">
       <header className="screen-header">
         <div>
-          <div className="eyebrow">Campanita</div>
+          <div className="eyebrow">Lectia</div>
           <h1 className="screen-title">Ajustes</h1>
         </div>
       </header>
@@ -245,7 +245,7 @@ export function SettingsScreen() {
                 <Smartphone size={18} />
               </span>
               <span className="li-main">
-                <div className="li-title">Instalar Campanita</div>
+                <div className="li-title">Instalar Lectia</div>
                 <div className="li-sub">Como una app más, con ícono y sin conexión</div>
               </span>
             </button>
@@ -296,7 +296,7 @@ export function SettingsScreen() {
               <Info size={18} />
             </span>
             <span className="li-main">
-              <div className="li-title">Campanita · Lector</div>
+              <div className="li-title">Lectia · Lector</div>
               <div className="li-sub">Versión {__APP_VERSION__} · Tus libros nunca salen de este dispositivo</div>
             </span>
           </div>

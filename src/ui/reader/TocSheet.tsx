@@ -44,7 +44,7 @@ export function TocSheet({ open, onClose, book, content, currentChapter, onGoCha
     content.kind === "pdf" ? `Página ${c + 1}` : content.chapters[c]?.title ?? `Capítulo ${c + 1}`;
 
   const exportNotes = async () => {
-    const lines = [`# ${book.title}`, book.author ? `*${book.author}*` : "", "", `Exportado desde Campanita el ${formatDate(Date.now())}.`, ""];
+    const lines = [`# ${book.title}`, book.author ? `*${book.author}*` : "", "", `Exportado desde Lectia el ${formatDate(Date.now())}.`, ""];
     let lastChapter = -1;
     for (const h of highlights) {
       if (h.chapter !== lastChapter) {

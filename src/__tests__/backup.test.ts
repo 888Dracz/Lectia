@@ -19,6 +19,12 @@ const book = (id: string, extra: Partial<BookMeta> = {}): BookMeta => ({
 });
 
 describe("respaldo", () => {
+  it("acepta respaldos de Campanita", () => {
+    const j = buildBackupJson(defaultState(), false, 1);
+    j.manifest.app = "campanita-lector";
+    expect(parseBackupJson(JSON.stringify(j)).manifest.books).toBe(0);
+  });
+
   it("ida y vuelta del JSON", () => {
     const s = defaultState();
     s.books.a = book("a");

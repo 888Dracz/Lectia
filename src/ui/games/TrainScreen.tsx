@@ -52,7 +52,7 @@ export function TrainScreen() {
         <div className="source-text">
           <div className="eyebrow">Practicar con</div>
           <div className="source-title">{source ? source.title : "Textos clásicos"}</div>
-          <div className="faint source-sub">{source ? "Desde donde vas leyendo" : "Cervantes, Lazarillo y relatos de Campanita"}</div>
+          <div className="faint source-sub">{source ? "Desde donde vas leyendo" : "Cervantes, Lazarillo y relatos de Lectia"}</div>
         </div>
         <ChevronDown size={20} className="faint" />
       </button>
@@ -97,7 +97,7 @@ export function TrainScreen() {
             <span className="li-icon emoji">📜</span>
             <span className="li-main">
               <div className="li-title">Textos clásicos</div>
-              <div className="li-sub">Fragmentos de dominio público y relatos de Campanita</div>
+              <div className="li-sub">Fragmentos de dominio público y relatos de Lectia</div>
             </span>
             {!source && <span className="accent-dot" />}
           </button>
