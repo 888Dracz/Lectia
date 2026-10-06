@@ -102,6 +102,13 @@ minijuegos, la lectura rápida, los niveles y rachas, y el respaldo.
 
 ### Publicación
 
-`.github/workflows/deploy.yml` construye y publica en GitHub Pages al fusionar a
-`main` (requiere **Settings → Pages → Source: GitHub Actions**; el flujo intenta
-activarlo solo). `.github/workflows/ci.yml` corre pruebas y build en cada PR.
+`.github/workflows/deploy.yml` publica la app en GitHub Pages. En este
+repositorio el entorno `github-pages` solo permite publicar desde la rama
+`claude/health-app-cycle-exercise-nutrition-ejjv2a`, así que:
+
+1. Cada push a `main` copia `main` en esa rama y lanza la publicación allí.
+2. La publicación (pruebas + build + deploy) corre en esa rama.
+
+Si se permite `main` en **Settings → Environments → github-pages → Deployment
+branches**, se puede publicar directamente desde `main`.
+`.github/workflows/ci.yml` corre pruebas y build en cada PR.
