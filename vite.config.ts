@@ -17,7 +17,7 @@ const BOOK_TYPES = {
   "application/vnd.comicbook+zip": [".cbz"],
 };
 
-// En producción se publica en GitHub Pages bajo /<repositorio>/ (p. ej. /lectia/).
+// En producción se publica en GitHub Pages bajo /<repositorio>/ (p. ej. /Lectia/).
 const repoName = process.env.GITHUB_REPOSITORY?.split("/")[1] ?? "lectia";
 export default defineConfig(({ command, isPreview }) => {
   const base = command === "build" || isPreview ? `/${repoName}/` : "/";
