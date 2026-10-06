@@ -1,32 +1,25 @@
-# Dependencies
+# Dependencias
 node_modules/
 
-# Build output
+# Build
 dist/
 dist-ssr/
+dev-dist/
 *.local
+*.tsbuildinfo
+
+# Recursos de pdf.js copiados en cada build (scripts/copy-pdfjs-assets.mjs)
+public/pdfjs/
 
 # Logs
-logs/
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
 
-# Editor / OS
+# Editor / SO
 .vscode/*
 !.vscode/extensions.json
 .idea/
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
 
-# Test / coverage
+# Tests
 coverage/
-
-# TypeScript incremental build info
-*.tsbuildinfo

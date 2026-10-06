@@ -1,0 +1,116 @@
+/* Tokens de diseño: colores, tipografías, radios y sombras. */
+:root {
+  --font-ui: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Fraunces Variable", "Fraunces", Georgia, "Times New Roman", serif;
+  --r-xs: 8px;
+  --r-s: 12px;
+  --r-m: 18px;
+  --r-l: 26px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tabbar-h: 66px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --gutter: 16px;
+
+  --gold: #f2b544;
+  --violet: #9b8cff;
+  --rose: #ff7aa2;
+  --teal: #45d0c1;
+  --green: #4fd68a;
+  --red: #ff6b6b;
+  --blue: #6aa8ff;
+  --orange: #ff9f43;
+}
+
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d0f15;
+  --bg-elev: #12151e;
+  --surface: #181c28;
+  --surface-2: #1f2433;
+  --surface-solid-2: #20263a;
+  --surface-3: #2a3049;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --text: #f0eef7;
+  --text-2: #b6b3c9;
+  --text-3: #7f7c96;
+  --accent: #f2b544;
+  --accent-2: #ffd98a;
+  --accent-ink: #1d1404;
+  --accent-soft: rgba(242, 181, 68, 0.14);
+  --accent-glow: rgba(242, 181, 68, 0.35);
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 12px 40px rgba(0, 0, 0, 0.5);
+  --shadow-cover: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 22px rgba(0, 0, 0, 0.45);
+  --glass: rgba(16, 18, 27, 0.78);
+  --scrim: rgba(4, 5, 10, 0.6);
+  --hero-grad: linear-gradient(135deg, #2a2350 0%, #171b2b 60%);
+  --wood-1: #5a3a22;
+  --wood-2: #3d2616;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f5f2ec;
+  --bg-elev: #faf8f4;
+  --surface: #ffffff;
+  --surface-2: #f0ece4;
+  --surface-solid-2: #efeae1;
+  --surface-3: #e4ddd1;
+  --line: rgba(35, 28, 60, 0.08);
+  --line-strong: rgba(35, 28, 60, 0.15);
+  --text: #1c1929;
+  --text-2: #57536b;
+  --text-3: #8d899d;
+  --accent: #c9850c;
+  --accent-2: #e8a93a;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(201, 133, 12, 0.12);
+  --accent-glow: rgba(201, 133, 12, 0.25);
+  --shadow-1: 0 1px 2px rgba(40, 30, 10, 0.06), 0 6px 18px rgba(40, 30, 10, 0.08);
+  --shadow-2: 0 14px 44px rgba(40, 30, 10, 0.18);
+  --shadow-cover: 0 1px 2px rgba(40, 30, 10, 0.18), 0 8px 20px rgba(40, 30, 10, 0.2);
+  --glass: rgba(250, 248, 244, 0.82);
+  --scrim: rgba(20, 16, 30, 0.38);
+  --hero-grad: linear-gradient(135deg, #efe3ff 0%, #fff4df 100%);
+  --wood-1: #c08a5a;
+  --wood-2: #8f5e36;
+}
+
+/* Colores de acento elegibles */
+:root[data-accent="violet"] {
+  --accent: #9b8cff;
+  --accent-2: #c3b9ff;
+  --accent-ink: #120d33;
+  --accent-soft: rgba(155, 140, 255, 0.15);
+  --accent-glow: rgba(155, 140, 255, 0.35);
+}
+:root[data-theme="light"][data-accent="violet"] {
+  --accent: #6c58e0;
+  --accent-ink: #fff;
+}
+:root[data-accent="rose"] {
+  --accent: #ff7aa2;
+  --accent-2: #ffb3c8;
+  --accent-ink: #330b18;
+  --accent-soft: rgba(255, 122, 162, 0.15);
+  --accent-glow: rgba(255, 122, 162, 0.35);
+}
+:root[data-theme="light"][data-accent="rose"] {
+  --accent: #d6457a;
+  --accent-ink: #fff;
+}
+:root[data-accent="teal"] {
+  --accent: #45d0c1;
+  --accent-2: #9bebe2;
+  --accent-ink: #062b27;
+  --accent-soft: rgba(69, 208, 193, 0.15);
+  --accent-glow: rgba(69, 208, 193, 0.35);
+}
+:root[data-theme="light"][data-accent="teal"] {
+  --accent: #128f82;
+  --accent-ink: #fff;
+}

@@ -1,97 +1,107 @@
-# 🔔 Campanita — Asistente de salud cíclica
+# 📚✨ Campanita · Lector
 
-Campanita es un **asistente de salud cíclico**: en lugar de tratar el ejercicio
-y la alimentación como planes fijos, los ajusta dinámicamente según la **fase
-del ciclo menstrual** y el **estado de ánimo** reportado por la usuaria. El
-ciclo menstrual actúa como el motor central que alimenta a los otros dos
-módulos.
+Lector de libros **para el celular**, inspirado en Moon+ Reader, con lectura
+rápida, minijuegos para leer mejor, biblioteca con estanterías y respaldo
+completo. Funciona sin conexión y se instala como una app más (PWA).
 
-Esta es una implementación **v1 funcional** (web app mobile-first) de la
-[especificación conceptual](docs/ESPECIFICACION.md).
+**Abrir la app:** <https://dracz888.github.io/campanita/>
+(se publica sola cada vez que se fusiona a `main`).
 
-## ✨ Qué hace
+## Qué puede hacer
 
-| Módulo | Descripción |
-|---|---|
-| **Ciclo (núcleo)** | Estima la duración del ciclo desde el histórico y clasifica cada día en una de 4 fases (menstrual, folicular, ovulatoria, lútea). |
-| **Ejercicio** | Recomienda rutina e intensidad según la fase. **El ánimo bajo sobrescribe la recomendación** y suaviza la rutina del día. |
-| **Nutrición** | Traduce la fase en un enfoque nutricional con nutrientes clave y alimentos sugeridos. |
-| **Ánimo / síntomas** | Mini-diario diario (escala 1–5 + síntomas) que retroalimenta ejercicio y consejos. |
-| **Alarma + consejos** | Contenido diario que cambia según fase y ánimo, con banco de frases motivacionales. |
-| **Calendario** | Exporta las rutinas sugeridas como archivo `.ics` para Google/Apple Calendar. |
-| **Informe médico** | Reporte automático de 30 días con patrones de ciclo, síntomas, ánimo por fase y adherencia, exportable a texto. |
-| **Estadísticas** | Dashboard con regularidad del ciclo, adherencia, ánimo por fase y síntomas recurrentes. |
+### 📖 Lector
+- Formatos: **EPUB, PDF, Word (.docx), TXT, Markdown, HTML, FB2 y cómics CBZ**.
+- Pasar página tocando los bordes o **deslizando el dedo**; tocar el centro muestra los menús.
+- **Brillo** deslizando el dedo arriba/abajo por el borde izquierdo.
+- 8 temas de lectura: Día, Papel, Sepia, Menta, Atardecer, Noche, AMOLED y Luna.
+- Tipografías (Literata, Lora, Merriweather, Atkinson Hyperlegible, Inter…), tamaño,
+  interlineado, márgenes, sangría, justificado y separación silábica.
+- Modo **páginas** o **desplazamiento** continuo.
+- **PDF**: páginas originales con zoom (también con pellizco) y filtro nocturno, o
+  **modo texto adaptable**.
+- Índice, **marcadores**, **subrayados de colores con notas** (exportables), **búsqueda**,
+  diccionario (RAE), copiar y compartir citas.
+- **Escuchar** el libro en voz alta (voz del sistema), con velocidad y voz elegibles.
+- Barra de estado con capítulo, página, hora, batería y porcentaje.
+- Mantiene la pantalla encendida y recuerda dónde te quedaste en cada libro.
 
-## 🏗️ Arquitectura
+### 🗂️ Biblioteca
+- Portadas reales (EPUB, PDF, FB2, CBZ) o portadas generadas con estilo.
+- Vistas en **cuadrícula**, **estantes de madera** o **lista**; búsqueda y orden.
+- Filtros (leyendo, por leer, terminados, favoritos) y **estanterías propias**.
+- Tarjeta “Continuar leyendo” con el tiempo estimado para terminar.
+- Agregar libros desde el selector de archivos, arrastrándolos (computadora) o con
+  **Compartir → Campanita** desde otras apps de Android (con la app instalada).
 
-El código separa un **núcleo de dominio puro** (sin React ni DOM) de la capa de
-UI, de modo que toda la lógica de negocio es testeable de forma aislada.
+### ⚡ Entrenar (dinámica de juegos)
+- **Lectura rápida (RSVP)**: palabra a palabra con letra de enfoque, de 100 a 1200 ppm,
+  en grupos de 1 a 3 palabras. Desde el lector empieza donde vas y te deja donde llegaste.
+- **Test de velocidad**: mide tus palabras por minuto y la comprensión.
+- **Palabra perdida**, **Ordena la frase**, **Destello** y **Tabla de Schulte**.
+- Los juegos usan **el libro que elijas** (desde donde vas leyendo) o textos clásicos.
+- **Polvo de hadas** ✨ (experiencia), niveles y rangos, **racha** de días, meta diaria,
+  retos del día y **24 logros**.
 
-```
-src/
-  core/            # Núcleo de dominio — puro y con tests unitarios
-    types.ts         # Modelo de datos (entidades de §6 de la spec)
-    date.ts          # Utilidades de fecha (ISO, UTC-safe)
-    cycle.ts         # Motor de fases: estimación + clasificación (Módulo 1)
-    exercise.ts      # Recomendación de ejercicio + override por ánimo (Módulo 2)
-    nutrition.ts     # Recomendación nutricional por fase (Módulo 3)
-    tips.ts          # Banco de consejos filtrado por fase/ánimo
-    stats.ts         # Estadísticas y tendencias
-    report.ts        # Generación del informe médico
-    notifications.ts # Alarma diaria + exportación de calendario (.ics)
-    *.test.ts        # 40 tests unitarios (vitest)
-  store/           # Estado de la app (useReducer) + persistencia localStorage
-  ui/              # Componentes React por pantalla
-  App.tsx          # Shell con navegación por pestañas
-```
+### 📈 Progreso
+Nivel, meta diaria, racha, retos, gráfico de la semana, calendario de lectura,
+totales y evolución de tu velocidad.
 
-### El motor de fases
+### 🛟 Respaldo
+En **Ajustes → Respaldo**:
+- **Respaldo completo**: un `.zip` con tus libros, portadas, estanterías, posiciones,
+  subrayados, notas, marcadores, ajustes, logros y estadísticas.
+- **Solo datos**: lo mismo pero sin los archivos de los libros (muy liviano).
+- Se puede **guardar en el teléfono o compartir** (Google Drive, correo…).
+- **Restaurar** en cualquier dispositivo, **combinando** con lo que ya hay o **reemplazándolo**.
 
-La ovulación se ubica ~14 días antes del siguiente periodo (la fase lútea es la
-más constante). A partir de la longitud estimada del ciclo `L`:
+> Todo se guarda **solo en tu dispositivo** (IndexedDB). Haz respaldos de vez en
+> cuando: si se borran los datos del navegador, la biblioteca solo se recupera
+> desde un respaldo.
 
-- **Menstrual**: días `1 … duraciónMenstruación`
-- **Folicular**: hasta la ventana ovulatoria
-- **Ovulatoria**: ventana de ~3 días alrededor del día `L − 14`
-- **Lútea**: desde la ovulación hasta el fin del ciclo
+## Instalar en el celular
 
-La estimación se considera **confiable** con 3+ ciclos completos registrados;
-antes usa la duración por defecto del perfil e indica que es preliminar.
+1. Abre <https://dracz888.github.io/campanita/> en Chrome (Android) o Safari (iPhone).
+2. Android: menú ⋮ → **Instalar app** (o “Agregar a la pantalla principal”).
+   iPhone: botón Compartir → **Agregar a inicio**.
+3. Ábrela desde su ícono: funciona sin conexión y en Android aparece en el menú
+   **Compartir** para enviarle libros desde el explorador de archivos, Drive, Telegram, etc.
 
-## 🚀 Desarrollo
+## Desarrollo
 
-Requiere Node 20+.
+Requiere Node 22.
 
 ```bash
 npm install
-npm run dev        # servidor de desarrollo (Vite)
-npm test           # tests unitarios del núcleo (vitest)
-npm run build      # typecheck + build de producción
-npm run preview    # sirve el build de producción
+npm run dev        # servidor de desarrollo (http://localhost:5173)
+npm test           # pruebas (vitest)
+npm run build      # typecheck + build de producción en dist/
+npm run preview    # sirve el build en http://localhost:4173/campanita/
 ```
 
-Los datos se guardan **solo en el dispositivo** (localStorage). La app arranca
-con datos de demostración; desde *Perfil* se pueden recargar o borrar.
+### Estructura
 
-## 🚢 Despliegue automático
+```
+src/
+  books/          # Formatos: epub, pdf (pdf.js), docx (mammoth), txt/md, html, fb2, cbz
+  backup/         # Respaldo y restauración (.zip con fflate)
+  games/          # Lógica de lectura rápida y generadores de minijuegos
+  lib/            # IndexedDB, utilidades de texto, navegación y botón "atrás"
+  store/          # Estado (zustand), gamificación (niveles, rachas, logros)
+  ui/
+    library/      # Biblioteca, estanterías, hoja de cada libro
+    reader/       # Lector: vista paginada, PDF, voz, RSVP, subrayados, búsqueda
+    games/        # Pantalla Entrenar y minijuegos
+    progress/     # Estadísticas y logros
+    settings/     # Ajustes y respaldo
+  sw.ts           # Service worker: sin conexión + "Compartir → Campanita"
+  styles/         # Sistema de diseño (temas claro/oscuro, colores de acento)
+```
 
-Cada vez que se fusiona a `main`, GitHub Actions **construye y publica la app
-automáticamente** en GitHub Pages (`.github/workflows/deploy.yml`):
+Las pruebas cubren los formatos (EPUB, TXT, Markdown, FB2, HTML, PDF), los
+minijuegos, la lectura rápida, los niveles y rachas, y el respaldo.
 
-1. Instala dependencias, corre los tests y hace el build de producción.
-2. Publica `dist/` en GitHub Pages.
+### Publicación
 
-URL de producción: `https://dracz888.github.io/campanita/`
-
-Además, `.github/workflows/ci.yml` corre tests + typecheck + build en cada
-pull request. Requiere tener habilitado **Settings → Pages → Source: GitHub
-Actions** (el workflow intenta habilitarlo solo la primera vez).
-
-## 🧭 Estado y próximos pasos
-
-Esta v1 cubre los 3 módulos y la capa de integración con datos locales. La
-[especificación](docs/ESPECIFICACION.md) contempla para futuras versiones:
-notificaciones push nativas, sincronización directa con el calendario del
-dispositivo (aquí resuelto vía export `.ics`) y conexión con wearables.
-
-> Campanita no reemplaza el consejo médico profesional.
+`.github/workflows/deploy.yml` construye y publica en GitHub Pages al fusionar a
+`main` (requiere **Settings → Pages → Source: GitHub Actions**; el flujo intenta
+activarlo solo). `.github/workflows/ci.yml` corre pruebas y build en cada PR.

@@ -1,110 +1,226 @@
-import type {
-  DailyLog,
-  ExerciseLog,
-  MealLog,
-  PeriodRecord,
-  UserProfile,
-} from "../core";
+// Estado persistente de la app: biblioteca, notas, ajustes y progreso.
+import type { BookMeta } from "../books/types";
 
-// ---------------------------------------------------------------------------
-// Estado de la aplicación y persistencia en localStorage.
-// Una v1 no necesita backend: todos los datos viven en el dispositivo.
-// ---------------------------------------------------------------------------
+export const STATE_VERSION = 1;
 
-export interface AppState {
-  profile: UserProfile;
-  periods: PeriodRecord[];
-  dailyLogs: DailyLog[];
-  exerciseLogs: ExerciseLog[];
-  mealLogs: MealLog[];
+export interface Collection {
+  id: string;
+  name: string;
+  emoji: string;
+  createdAt: number;
 }
 
-const STORAGE_KEY = "campanita.state.v1";
+export interface Bookmark {
+  id: string;
+  bookId: string;
+  chapter: number;
+  fraction: number;
+  percent: number;
+  label: string;
+  createdAt: number;
+}
 
-export const defaultProfile: UserProfile = {
-  nombre: "",
-  nivel: "intermedio",
-  objetivo: "mantenimiento",
-  restricciones: [],
-  duracionMenstruacion: 5,
-  duracionCicloPorDefecto: 28,
+export type HighlightColor = "yellow" | "green" | "blue" | "pink";
+
+export interface Highlight {
+  id: string;
+  bookId: string;
+  chapter: number;
+  /** Desplazamientos en el texto plano del capítulo. */
+  start: number;
+  end: number;
+  text: string;
+  color: HighlightColor;
+  note: string;
+  createdAt: number;
+}
+
+export type ReaderThemeId = "day" | "paper" | "sepia" | "mint" | "dusk" | "night" | "amoled" | "moon";
+export type FontId = "literata" | "lora" | "merriweather" | "atkinson" | "inter" | "serif" | "sans";
+
+export interface ReaderSettings {
+  theme: ReaderThemeId;
+  font: FontId;
+  fontSize: number;
+  lineHeight: number;
+  margin: number;
+  align: "justify" | "left";
+  paragraphSpacing: number;
+  indent: boolean;
+  hyphenate: boolean;
+  mode: "paged" | "scroll";
+  animation: "slide" | "none";
+  brightness: number;
+  tapZones: boolean;
+  showStatus: boolean;
+  keepAwake: boolean;
+  fullscreen: boolean;
+  ttsRate: number;
+  ttsVoice: string;
+  rsvpWpm: number;
+  rsvpChunk: number;
+  pdfZoom: number;
+}
+
+export type LibraryView = "grid" | "list" | "shelf";
+export type LibrarySort = "recent" | "added" | "title" | "author" | "progress";
+
+export interface AppSettings {
+  theme: "system" | "light" | "dark";
+  accent: "gold" | "violet" | "rose" | "teal";
+  dailyGoalMin: number;
+  libraryView: LibraryView;
+  librarySort: LibrarySort;
+  trainingSource: string;
+  lastBackupAt?: number;
+  sampleOffered: boolean;
+  backupNagDismissedAt?: number;
+}
+
+export interface DayStats {
+  ms: number;
+  pages: number;
+  words: number;
+  games: number;
+  rsvpWords: number;
+  xp: number;
+  quests: string[];
+}
+
+export type GameId = "rsvp" | "speedtest" | "cloze" | "scramble" | "flash" | "schulte";
+
+export interface GameRecord {
+  plays: number;
+  best: number;
+  lastAt: number;
+}
+
+export interface WpmSample {
+  at: number;
+  wpm: number;
+  comprehension: number;
+}
+
+export interface Progress {
+  xp: number;
+  achievements: Record<string, number>;
+  days: Record<string, DayStats>;
+  games: Partial<Record<GameId, GameRecord>>;
+  wpmHistory: WpmSample[];
+  totalPages: number;
+  totalRsvpWords: number;
+  bestRsvpWpm: number;
+  booksFinished: number;
+}
+
+export interface PersistedState {
+  version: number;
+  books: Record<string, BookMeta>;
+  collections: Collection[];
+  bookmarks: Bookmark[];
+  highlights: Highlight[];
+  reader: ReaderSettings;
+  app: AppSettings;
+  progress: Progress;
+}
+
+export const DEFAULT_READER: ReaderSettings = {
+  theme: "paper",
+  font: "literata",
+  fontSize: 19,
+  lineHeight: 1.6,
+  margin: 22,
+  align: "justify",
+  paragraphSpacing: 0.4,
+  indent: true,
+  hyphenate: true,
+  mode: "paged",
+  animation: "slide",
+  brightness: 1,
+  tapZones: true,
+  showStatus: true,
+  keepAwake: true,
+  fullscreen: false,
+  ttsRate: 1,
+  ttsVoice: "",
+  rsvpWpm: 300,
+  rsvpChunk: 1,
+  pdfZoom: 1,
 };
 
-/**
- * Estado de ejemplo para que la app tenga contenido significativo la primera
- * vez (histórico de ~4 ciclos, algunos registros de ánimo y ejercicio).
- * Anclado a comienzos de 2026 para ser determinista en tests/demo.
- */
-export function seedState(): AppState {
+export const DEFAULT_APP: AppSettings = {
+  theme: "system",
+  accent: "gold",
+  dailyGoalMin: 20,
+  libraryView: "grid",
+  librarySort: "recent",
+  trainingSource: "classics",
+  sampleOffered: false,
+};
+
+export const DEFAULT_PROGRESS: Progress = {
+  xp: 0,
+  achievements: {},
+  days: {},
+  games: {},
+  wpmHistory: [],
+  totalPages: 0,
+  totalRsvpWords: 0,
+  bestRsvpWpm: 0,
+  booksFinished: 0,
+};
+
+export function emptyDay(): DayStats {
+  return { ms: 0, pages: 0, words: 0, games: 0, rsvpWords: 0, xp: 0, quests: [] };
+}
+
+export function defaultState(): PersistedState {
   return {
-    profile: {
-      ...defaultProfile,
-      nombre: "Ana",
-      nivel: "intermedio",
-      objetivo: "tono",
-    },
-    periods: [
-      { inicio: "2026-04-02", fin: "2026-04-06", flujo: "normal" },
-      { inicio: "2026-04-30", fin: "2026-05-04", flujo: "normal" },
-      { inicio: "2026-05-29", fin: "2026-06-02", flujo: "abundante" },
-      { inicio: "2026-06-26", fin: "2026-06-30", flujo: "normal" },
-    ],
-    dailyLogs: [
-      { fecha: "2026-06-26", animo: 2, sintomas: ["colicos", "fatiga"] },
-      { fecha: "2026-06-27", animo: 2, sintomas: ["colicos"] },
-      { fecha: "2026-07-01", animo: 4, sintomas: [] },
-      { fecha: "2026-07-03", animo: 5, sintomas: [] },
-    ],
-    exerciseLogs: [
-      { fecha: "2026-06-26", tipo: "yoga", completado: true },
-      { fecha: "2026-07-01", tipo: "fuerza", completado: true },
-      { fecha: "2026-07-03", tipo: "hiit", completado: false },
-    ],
-    mealLogs: [
-      { fecha: "2026-06-26", descripcion: "Lentejas con espinaca" },
-      { fecha: "2026-07-01", descripcion: "Pollo con quinoa" },
-    ],
+    version: STATE_VERSION,
+    books: {},
+    collections: [],
+    bookmarks: [],
+    highlights: [],
+    reader: { ...DEFAULT_READER },
+    app: { ...DEFAULT_APP },
+    progress: { ...DEFAULT_PROGRESS, achievements: {}, days: {}, games: {}, wpmHistory: [] },
   };
 }
 
-export function emptyState(): AppState {
-  return {
-    profile: defaultProfile,
-    periods: [],
-    dailyLogs: [],
-    exerciseLogs: [],
-    mealLogs: [],
-  };
-}
-
-export function loadState(): AppState {
-  if (typeof localStorage === "undefined") return seedState();
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedState();
-    const parsed = JSON.parse(raw) as Partial<AppState>;
-    return {
-      profile: { ...defaultProfile, ...parsed.profile },
-      periods: parsed.periods ?? [],
-      dailyLogs: parsed.dailyLogs ?? [],
-      exerciseLogs: parsed.exerciseLogs ?? [],
-      mealLogs: parsed.mealLogs ?? [],
+/** Completa con valores por defecto un estado guardado (o importado) antiguo o parcial. */
+export function migrateState(raw: unknown): PersistedState {
+  const base = defaultState();
+  if (!raw || typeof raw !== "object") return base;
+  const s = raw as Partial<PersistedState>;
+  const books: Record<string, BookMeta> = {};
+  for (const [id, b] of Object.entries(s.books ?? {})) {
+    if (!b || typeof b !== "object" || !b.id) continue;
+    books[id] = {
+      ...b,
+      author: b.author ?? "",
+      collections: Array.isArray(b.collections) ? b.collections : [],
+      favorite: !!b.favorite,
+      readingMs: b.readingMs ?? 0,
+      status: b.status ?? "unread",
     };
-  } catch {
-    return seedState();
   }
-}
-
-export function saveState(state: AppState): void {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Cuota llena o modo privado: no bloqueamos la app por esto.
-  }
-}
-
-export function clearState(): void {
-  if (typeof localStorage === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
+  const days: Record<string, DayStats> = {};
+  for (const [k, d] of Object.entries(s.progress?.days ?? {})) days[k] = { ...emptyDay(), ...d };
+  return {
+    version: STATE_VERSION,
+    books,
+    collections: Array.isArray(s.collections) ? s.collections : base.collections,
+    bookmarks: Array.isArray(s.bookmarks) ? s.bookmarks : [],
+    highlights: Array.isArray(s.highlights) ? s.highlights : [],
+    reader: { ...DEFAULT_READER, ...(s.reader ?? {}) },
+    app: { ...DEFAULT_APP, ...(s.app ?? {}) },
+    progress: {
+      ...DEFAULT_PROGRESS,
+      ...(s.progress ?? {}),
+      achievements: { ...(s.progress?.achievements ?? {}) },
+      games: { ...(s.progress?.games ?? {}) },
+      wpmHistory: Array.isArray(s.progress?.wpmHistory) ? s.progress!.wpmHistory : [],
+      days,
+    },
+  };
 }
