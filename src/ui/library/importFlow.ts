@@ -42,6 +42,15 @@ export async function addWelcomeBook(): Promise<void> {
   }
 }
 
+// Lista explícita de tipos: sin ella, Android/iPhone muestran solo cámara y fotos.
+export const BOOK_ACCEPT = [
+  ".pdf", ".epub", ".docx", ".txt", ".md", ".markdown", ".html", ".htm", ".fb2", ".cbz",
+  "application/pdf", "application/epub+zip",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain", "text/markdown", "text/html", "application/x-fictionbook+xml",
+  "application/vnd.comicbook+zip", "application/zip", "application/octet-stream",
+].join(",");
+
 export function pickFiles(onFiles: (files: File[]) => void, accept?: string) {
   const input = document.createElement("input");
   input.type = "file";

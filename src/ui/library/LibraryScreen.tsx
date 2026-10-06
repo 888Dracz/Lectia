@@ -28,7 +28,7 @@ import { Bar, Ring } from "../components/controls";
 import { promptDialog } from "../components/Dialog";
 import { Sheet } from "../components/Sheet";
 import { BookActionsSheet } from "./BookSheets";
-import { addWelcomeBook, pickFiles, runImport } from "./importFlow";
+import { addWelcomeBook, BOOK_ACCEPT, pickFiles, runImport } from "./importFlow";
 import { formatRemaining, openBook, remainingMinutes } from "./useOpenBook";
 
 type Filter = "all" | "reading" | "unread" | "finished" | "fav" | string;
@@ -114,7 +114,7 @@ export function LibraryScreen() {
     (!app.lastBackupAt || Date.now() - app.lastBackupAt > 14 * 86400000) &&
     (!app.backupNagDismissedAt || Date.now() - app.backupNagDismissedAt > 7 * 86400000);
 
-  const addBooks = () => pickFiles((files) => void runImport(files));
+  const addBooks = () => pickFiles((files) => void runImport(files), BOOK_ACCEPT);
 
   const newShelf = async () => {
     const name = await promptDialog("Nueva estantería", "", "Ej.: Novelas, Estudio, Poesía…", "Crear");

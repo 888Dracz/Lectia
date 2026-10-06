@@ -1,18 +1,11 @@
 name: Publicar en GitHub Pages
 
-# En este repositorio, el entorno "github-pages" solo permite publicar desde la
-# rama PUBLISH_BRANCH. Por eso:
-#   1. Un push a main copia main en PUBLISH_BRANCH y lanza la publicación allí.
-#   2. La publicación (build + deploy) corre en PUBLISH_BRANCH.
-# Si algún día se permite "main" en Settings → Environments → github-pages →
-# Deployment branches, se puede publicar directamente desde main.
+# Al fusionar a main se construye la app y se publica en
+# https://dracz888.github.io/campanita/ (también se puede lanzar a mano).
 on:
   push:
-    branches: [main, claude/health-app-cycle-exercise-nutrition-ejjv2a]
+    branches: [main]
   workflow_dispatch:
-
-env:
-  PUBLISH_BRANCH: claude/health-app-cycle-exercise-nutrition-ejjv2a
 
 permissions:
   contents: read
@@ -20,33 +13,11 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages-${{ github.ref }}
+  group: pages
   cancel-in-progress: true
 
 jobs:
-  # main → rama de publicación
-  sync:
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Copiar main en la rama de publicación
-        run: git push --force origin "HEAD:refs/heads/${PUBLISH_BRANCH}"
-
-      # Los push hechos con GITHUB_TOKEN no disparan flujos; workflow_dispatch sí.
-      - name: Lanzar la publicación
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run deploy.yml --repo "${{ github.repository }}" --ref "${PUBLISH_BRANCH}"
-
   build:
-    if: github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
