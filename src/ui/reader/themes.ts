@@ -1,4 +1,4 @@
-import type { FontId, ReaderThemeId } from "../../store/state";
+import type { CustomTheme, FontId, ReaderThemeId } from "../../store/state";
 
 export interface ReaderTheme {
   id: ReaderThemeId;
@@ -24,8 +24,35 @@ export const READER_THEMES: ReaderTheme[] = [
   { id: "moon", name: "Luna", bg: "#0b1220", fg: "#9fc3c6", muted: "#4f6670", link: "#7fd4c8", dark: true, pdfFilter: "invert(0.9) hue-rotate(160deg) sepia(0.2)", chrome: "#0b1220" },
 ];
 
-export function readerTheme(id: ReaderThemeId): ReaderTheme {
+const mix = (a: string, b: string, t: number) => `color-mix(in srgb, ${a} ${Math.round((1 - t) * 100)}%, ${b})`;
+
+/** Tema creado por el usuario a partir de sus colores. */
+export function customReaderTheme(c: CustomTheme): ReaderTheme {
+  return {
+    id: "custom",
+    name: "Personal",
+    bg: c.bg,
+    fg: c.fg,
+    muted: mix(c.fg, c.bg, 0.5),
+    link: c.link,
+    dark: c.dark,
+    pdfFilter: c.dark ? "invert(0.88) hue-rotate(180deg)" : "none",
+    chrome: c.bg,
+  };
+}
+
+export function readerTheme(id: ReaderThemeId, custom?: CustomTheme): ReaderTheme {
+  if (id === "custom" && custom) return customReaderTheme(custom);
   return READER_THEMES.find((t) => t.id === id) ?? READER_THEMES[1];
+}
+
+/** Color aproximado de una temperatura de color (kelvin), para el filtro de luz azul. */
+export function kelvinToRgb(k: number): string {
+  const t = Math.min(6600, Math.max(1000, k)) / 100;
+  const r = 255;
+  const g = Math.min(255, Math.max(0, 99.47 * Math.log(t) - 161.12));
+  const b = t <= 19 ? 0 : Math.min(255, Math.max(0, 138.52 * Math.log(t - 10) - 305.04));
+  return `rgb(${r}, ${Math.round(g)}, ${Math.round(b)})`;
 }
 
 export interface ReaderFont {

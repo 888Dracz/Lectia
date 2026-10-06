@@ -24,6 +24,7 @@ import "./styles/progress.css";
 import { App } from "./App";
 import { consumeSharedFiles, setupPwa } from "./pwa";
 import { useStore } from "./store/store";
+import { runSync } from "./sync/sync";
 
 // Aplica el tema antes de pintar para evitar parpadeos.
 const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -37,5 +38,20 @@ void useStore
   .hydrate()
   .then(() => {
     useStore.getState().checkAchievements();
+    autoSync("both");
     return consumeSharedFiles();
   });
+
+// Sincronización automática: al abrir la app y al salir de ella.
+function autoSync(direction: "both" | "upload") {
+  const sync = useStore.getState().app.sync;
+  if (!sync.auto || sync.provider === "none" || !navigator.onLine) return;
+  void runSync(direction).catch((e) => console.warn("Sincronización", e));
+}
+let lastAutoUpload = 0;
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && Date.now() - lastAutoUpload > 60000) {
+    lastAutoUpload = Date.now();
+    autoSync("upload");
+  }
+});

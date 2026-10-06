@@ -33,7 +33,7 @@ export function setupPwa() {
   lq?.setConsumer(async (params) => {
     if (!params.files?.length) return;
     const files = await Promise.all(params.files.map((h) => h.getFile()));
-    await runImport(files);
+    await runImport(files, { external: true });
   });
 }
 
@@ -46,7 +46,7 @@ export async function consumeSharedFiles() {
   }
   try {
     const items = await takeInbox();
-    if (items.length) await runImport(items.map((i) => i.file));
+    if (items.length) await runImport(items.map((i) => i.file), { external: true });
   } catch {
     /* sin bandeja */
   }

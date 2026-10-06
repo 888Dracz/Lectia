@@ -18,6 +18,49 @@ const BLOCK_TAGS = new Set([
   "FIGURE", "FIGCAPTION", "HR", "BR",
 ]);
 
+/** Opciones del motor que cambian cómo se limpia el HTML de los libros. */
+export interface EngineOptions {
+  /** Conservar los estilos en línea del libro (filtrados para no romper los temas). */
+  bookStyles: boolean;
+  /** Conservar las fuentes indicadas por el libro. */
+  publisherFonts: boolean;
+  /** Quitar párrafos y líneas vacías. */
+  cleanEmptyLines: boolean;
+  /** Unir espacios dobles y recortar los del inicio de cada párrafo. */
+  cleanSpaces: boolean;
+}
+
+let engine: EngineOptions = { bookStyles: false, publisherFonts: false, cleanEmptyLines: false, cleanSpaces: false };
+
+export function setEngineOptions(o: EngineOptions): void {
+  engine = { ...o };
+}
+
+export function engineKey(o: EngineOptions = engine): string {
+  return [o.bookStyles, o.publisherFonts, o.cleanEmptyLines, o.cleanSpaces].map((b) => (b ? 1 : 0)).join("");
+}
+
+// Propiedades CSS del libro que se respetan: forma del texto, no colores ni fondos.
+const SAFE_CSS = /^(text-align|text-indent|font-style|font-weight|font-variant|text-transform|letter-spacing|word-spacing|text-decoration|margin(-top|-bottom|-left|-right)?|padding(-left|-right)?|font-size|line-height|white-space|font-family)$/;
+
+export function filterBookStyle(style: string, keepFonts: boolean): string {
+  return style
+    .split(";")
+    .map((d) => d.trim())
+    .filter((d) => {
+      const i = d.indexOf(":");
+      if (i < 0) return false;
+      const prop = d.slice(0, i).trim().toLowerCase();
+      const val = d.slice(i + 1).toLowerCase();
+      if (!SAFE_CSS.test(prop) || /url\(|expression|javascript:/.test(val)) return false;
+      if (prop === "font-family") return keepFonts;
+      // Tamaños absolutos romperían el ajuste de tamaño de letra del lector.
+      if ((prop === "font-size" || prop === "line-height") && /\d(px|pt|cm|mm|in)\b/.test(val)) return false;
+      return true;
+    })
+    .join("; ");
+}
+
 let purifierReady = false;
 
 function purifier() {
@@ -28,6 +71,11 @@ function purifier() {
       if (node.tagName === "A") {
         const href = node.getAttribute("href") ?? "";
         if (/^https?:/i.test(href)) node.setAttribute("rel", "noopener noreferrer");
+      }
+      if (node.hasAttribute?.("style")) {
+        const st = filterBookStyle(node.getAttribute("style") ?? "", engine.publisherFonts);
+        if (st) node.setAttribute("style", st);
+        else node.removeAttribute("style");
       }
     });
   }
@@ -49,11 +97,55 @@ export function preserveInlineFormatting(root: Element | Document): void {
     if (/font-weight\s*:\s*(bold|[6-9]00)/.test(st)) el.setAttribute("data-b", "1");
   });
   root.querySelectorAll("center").forEach((el) => el.setAttribute("data-a", "c"));
+  markSemantics(root);
   root.querySelectorAll("[align]").forEach((el) => {
     const a = (el.getAttribute("align") ?? "").toLowerCase();
     if (a === "center") el.setAttribute("data-a", "c");
     else if (a === "right") el.setAttribute("data-a", "r");
   });
+}
+
+function epubType(el: Element): string {
+  return (el.getAttribute("epub:type") ?? el.getAttributeNS?.("http://www.idpf.org/2007/ops", "type") ?? "").toLowerCase();
+}
+
+/**
+ * Marca con `data-*` lo que DOMPurify no conservaría: saltos de página de la
+ * edición impresa (`data-pb`), llamadas a notas (`data-noteref`) y notas (`data-fn`).
+ */
+export function markSemantics(root: Element | Document): void {
+  root.querySelectorAll("*").forEach((el) => {
+    const t = epubType(el);
+    const role = (el.getAttribute("role") ?? "").toLowerCase();
+    if (/\bpagebreak\b/.test(t) || role === "doc-pagebreak") {
+      const label = el.getAttribute("title") || el.getAttribute("aria-label") || (el.textContent ?? "").trim() || (el.id.match(/\d+/)?.[0] ?? "");
+      if (label) el.setAttribute("data-pb", label.slice(0, 12));
+    }
+    if (/\bnoteref\b/.test(t) || role === "doc-noteref") el.setAttribute("data-noteref", "1");
+    if (/\b(footnote|endnote|rearnote|note)\b/.test(t) || /^doc-(footnote|endnote)s?$/.test(role)) el.setAttribute("data-fn", "1");
+  });
+}
+
+/** Quita líneas vacías y espacios sobrantes (si está activado). */
+function cleanFragment(frag: DocumentFragment): void {
+  if (engine.cleanEmptyLines) {
+    frag.querySelectorAll("p, div").forEach((el) => {
+      if (!el.querySelector("img, svg, hr, table, [id], [data-pb]") && !(el.textContent ?? "").replace(/[\s\u00a0\u200b]+/g, "")) el.remove();
+    });
+    frag.querySelectorAll("br + br").forEach((br) => br.remove());
+  }
+  if (engine.cleanSpaces) {
+    const walker = frag.ownerDocument!.createTreeWalker(frag, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+      if (n.parentElement?.closest("pre")) continue;
+      const v = n.data.replace(/[ \u00a0\t]{2,}/g, " ");
+      if (v !== n.data) n.data = v;
+    }
+    frag.querySelectorAll("p").forEach((p) => {
+      const first = p.firstChild;
+      if (first?.nodeType === 3) (first as Text).data = (first as Text).data.replace(/^[\s\u00a0]+/, "");
+    });
+  }
 }
 
 export interface SanitizeOptions {
@@ -65,7 +157,7 @@ export interface SanitizeOptions {
 export function sanitizeToFragment(html: string, opts: SanitizeOptions = {}): DocumentFragment {
   const frag = purifier().sanitize(html, {
     FORBID_TAGS,
-    FORBID_ATTR,
+    FORBID_ATTR: engine.bookStyles ? FORBID_ATTR.filter((a) => a !== "style") : FORBID_ATTR,
     RETURN_DOM_FRAGMENT: true,
     ALLOW_DATA_ATTR: true,
   }) as DocumentFragment;
@@ -115,8 +207,9 @@ export function sanitizeToFragment(html: string, opts: SanitizeOptions = {}): Do
 
   // Quita contenedores vacíos que solo ocupan espacio (muy común en EPUB).
   frag.querySelectorAll("div, span, p").forEach((el) => {
-    if (!el.firstChild && !el.id) el.remove();
+    if (!el.firstChild && !el.id && !el.hasAttribute("data-pb")) el.remove();
   });
+  cleanFragment(frag);
 
   return frag;
 }

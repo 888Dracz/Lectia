@@ -15,6 +15,7 @@ const BOOK_TYPES = {
   "text/html": [".html", ".htm"],
   "application/x-fictionbook+xml": [".fb2"],
   "application/vnd.comicbook+zip": [".cbz"],
+  "application/x-mobipocket-ebook": [".mobi", ".azw", ".azw3", ".prc"],
 };
 
 // En producción se publica en GitHub Pages bajo /<repositorio>/ (p. ej. /lectia/).

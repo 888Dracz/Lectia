@@ -3,11 +3,26 @@ import { markdownToBook } from "../../books/formats/text";
 import { useStore } from "../../store/store";
 import { toast, useUi } from "../../store/ui";
 import { WELCOME_BOOK } from "../../welcome";
+import { navigate } from "../../lib/router";
+import { choiceDialog } from "../components/Dialog";
 
 /** Importa archivos mostrando el progreso y un resumen al final. */
-export async function runImport(files: File[]): Promise<void> {
+export async function runImport(files: File[], opts: { external?: boolean } = {}): Promise<void> {
   if (!files.length) return;
   const ui = useUi.getState();
+  // Libros que llegan desde otra app: se pregunta antes de guardarlos.
+  if (opts.external && useStore.getState().app.confirmExternalSave) {
+    const names = files.map((f) => f.name).join(", ");
+    const choice = await choiceDialog(
+      files.length === 1 ? "Guardar archivo de libro" : `Guardar ${files.length} libros`,
+      `¿Quieres guardar ${names} en tu biblioteca de Lectia?`,
+      [
+        { label: "Cancelar", value: "no" },
+        { label: files.length === 1 ? "Guardar y abrir" : "Guardar", value: "yes", tone: "primary" },
+      ]
+    );
+    if (choice !== "yes") return;
+  }
   try {
     const res = await importFiles(files, (done, total, name) => {
       ui.setBusy(total > 1 ? `Agregando ${Math.min(done + 1, total)} de ${total}…` : `Agregando “${name}”…`);
@@ -16,6 +31,7 @@ export async function runImport(files: File[]): Promise<void> {
     if (res.added.length === 1) toast(`“${res.added[0].title}” agregado a tu biblioteca`, { tone: "success" });
     else if (res.added.length > 1) toast(`${res.added.length} libros agregados`, { tone: "success" });
     for (const s of res.skipped) toast(`${s.name}: ${s.reason}`, { tone: "error" }, 5000);
+    if (opts.external && res.added.length === 1) navigate({ name: "reader", bookId: res.added[0].id });
   } catch (e) {
     ui.setBusy(null);
     toast(e instanceof Error ? e.message : "No se pudo importar", { tone: "error" });
@@ -44,11 +60,11 @@ export async function addWelcomeBook(): Promise<void> {
 
 // Lista explícita de tipos: sin ella, Android/iPhone muestran solo cámara y fotos.
 export const BOOK_ACCEPT = [
-  ".pdf", ".epub", ".docx", ".txt", ".md", ".markdown", ".html", ".htm", ".fb2", ".cbz",
+  ".pdf", ".epub", ".docx", ".txt", ".md", ".markdown", ".html", ".htm", ".fb2", ".cbz", ".mobi", ".azw", ".azw3", ".prc",
   "application/pdf", "application/epub+zip",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "text/plain", "text/markdown", "text/html", "application/x-fictionbook+xml",
-  "application/vnd.comicbook+zip", "application/zip", "application/octet-stream",
+  "application/vnd.comicbook+zip", "application/x-mobipocket-ebook", "application/vnd.amazon.ebook", "application/zip", "application/octet-stream",
 ].join(",");
 
 export function pickFiles(onFiles: (files: File[]) => void, accept?: string) {

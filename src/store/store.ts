@@ -48,7 +48,9 @@ interface Actions {
   removeHighlight: (id: string) => void;
   setReader: (patch: Partial<ReaderSettings>) => void;
   setApp: (patch: Partial<AppSettings>) => void;
-  logReading: (bookId: string, ms: number, pages: number) => void;
+  logReading: (bookId: string, ms: number, pages: number, percent?: number) => void;
+  /** Anota el avance del día del libro (para su historial). */
+  notePercent: (bookId: string, percent: number) => void;
   logGame: (game: GameId, score: number, xp: number) => void;
   logRsvp: (words: number, wpm: number, ms: number) => void;
   logWpmTest: (sample: Omit<WpmSample, "at">) => void;
@@ -216,11 +218,26 @@ export const useStore = create<Store>((set, get) => {
       if (patch.lastBackupAt) get().checkAchievements();
     },
 
-    logReading: (bookId, ms, pages) => {
+    notePercent: (bookId, percent) => {
+      const b = get().books[bookId];
+      if (!b) return;
+      const key = dayKey();
+      const h = b.history?.[key];
+      const day = h ? { ...h, to: percent } : { ms: 0, from: percent, to: percent };
+      if (h && h.to === percent) return;
+      get().updateBook(bookId, { history: { ...(b.history ?? {}), [key]: day } });
+    },
+
+    logReading: (bookId, ms, pages, percent) => {
       if (ms <= 0 && pages <= 0) return;
       const before = get().progress.days[dayKey()]?.ms ?? 0;
       const b = get().books[bookId];
-      if (b) get().updateBook(bookId, { readingMs: (b.readingMs || 0) + ms, lastOpenedAt: Date.now() });
+      if (b) {
+        const key = dayKey();
+        const h = b.history?.[key] ?? { ms: 0, from: percent ?? b.location?.percent ?? 0, to: percent ?? b.location?.percent ?? 0 };
+        const day = { ...h, ms: h.ms + ms, to: percent ?? h.to };
+        get().updateBook(bookId, { readingMs: (b.readingMs || 0) + ms, lastOpenedAt: Date.now(), history: { ...(b.history ?? {}), [key]: day } });
+      }
       updateDay((d) => ({ ...d, ms: d.ms + ms, pages: d.pages + pages }));
       const p = get().progress;
       set({ progress: { ...p, totalPages: p.totalPages + pages } });
