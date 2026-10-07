@@ -239,7 +239,7 @@ export function useHealthAlerts(breakMin: number, times: string[], sessionMs: ()
 /** Muestra una notificación del sistema si hay permiso (si no, solo el aviso en pantalla). */
 export function systemNotify(title: string, body: string): void {
   try {
-    if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: `${import.meta.env.BASE_URL}icon-192.png` });
+    if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: `${import.meta.env.BASE_URL}icon-192-v2.png` });
   } catch {
     /* algunos navegadores solo permiten notificar desde el service worker */
   }
