@@ -4,7 +4,7 @@ Lector de libros **para el celular**, inspirado en Moon+ Reader, con lectura
 rápida, minijuegos para leer mejor, biblioteca con estanterías y respaldo
 completo. Funciona sin conexión y se instala como una app más (PWA).
 
-**Abrir la app:** <https://888dracz.github.io/lectia/>
+**Abrir la app:** <https://888dracz.github.io/Lectia/>
 (se publica sola cada vez que se fusiona a `main`).
 
 ## Qué puede hacer
@@ -60,7 +60,7 @@ En **Ajustes → Respaldo**:
 
 ## Instalar en el celular
 
-1. Abre <https://888dracz.github.io/lectia/> en Chrome (Android) o Safari (iPhone).
+1. Abre <https://888dracz.github.io/Lectia/> en Chrome (Android) o Safari (iPhone).
 2. Android: menú ⋮ → **Instalar app** (o “Agregar a la pantalla principal”).
    iPhone: botón Compartir → **Agregar a inicio**.
 3. Ábrela desde su ícono: funciona sin conexión y en Android aparece en el menú
