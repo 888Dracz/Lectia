@@ -54,6 +54,8 @@ export interface SelectionInfo {
   fraction: number;
   text: string;
   rect: { top: number; bottom: number; left: number; right: number };
+  /** Texto plano del capítulo (para recortar o partir marcas al quitarlas). */
+  source: string;
 }
 
 export interface ReadingBlock {
@@ -91,7 +93,8 @@ interface Props {
   onCenterTap: () => void;
   onPageTurn: () => void;
   onReachEnd: () => void;
-  onHighlightTap: (id: string) => void;
+  /** Toque sobre texto marcado: ids de todas las marcas en ese punto, de la más interna a la más externa. */
+  onHighlightTap: (ids: string[]) => void;
   onSelection: (s: SelectionInfo | null) => void;
   onBrightness: (v: number) => void;
   onFontSize: (v: number) => void;
@@ -872,9 +875,12 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
       }
       return;
     }
-    const mark = target?.closest?.("mark[data-hl]") as HTMLElement | null;
-    if (mark?.dataset.hl) {
-      p.current.onHighlightTap(mark.dataset.hl);
+    const ids: string[] = [];
+    for (let m = target?.closest?.("mark[data-hl]") as HTMLElement | null; m; m = m.parentElement?.closest("mark[data-hl]") as HTMLElement | null) {
+      if (m.dataset.hl && !ids.includes(m.dataset.hl)) ids.push(m.dataset.hl);
+    }
+    if (ids.length) {
+      p.current.onHighlightTap(ids);
       return;
     }
     const rect = viewRef.current!.getBoundingClientRect();
@@ -926,7 +932,8 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
         if (!text.trim()) return p.current.onSelection(null);
         const start = offsetOf(el, r.startContainer, r.startOffset);
         const box = r.getBoundingClientRect();
-        const total = (el.textContent ?? "").length || 1;
+        const source = el.textContent ?? "";
+        const total = source.length || 1;
         p.current.onSelection({
           chapter: st.current.chapter,
           start,
@@ -934,6 +941,7 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
           fraction: Math.min(1, start / total),
           text: text.trim(),
           rect: { top: box.top, bottom: box.bottom, left: box.left, right: box.right },
+          source,
         });
       }, 220);
     };

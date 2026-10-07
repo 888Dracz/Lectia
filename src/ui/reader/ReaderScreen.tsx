@@ -42,7 +42,7 @@ import {
 import { goBack, navigate, useBackClose } from "../../lib/router";
 import { formatMinutes, minutesFor, readingWpm, remainingWords } from "../../lib/stats";
 import { clamp, debounce, formatNumber, safeStorage } from "../../lib/util";
-import type { Clip, Highlight, ReaderSettings, ToolId } from "../../store/state";
+import type { Clip, Highlight, LooseNote, ReaderSettings, ToolId } from "../../store/state";
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
 import { confirmDialog } from "../components/Dialog";
@@ -53,7 +53,7 @@ import { CropTool } from "./CropTool";
 import { DrawMode } from "./DrawMode";
 import { takePendingJump } from "./jump";
 import { NotebookView } from "../notebook/NotebookView";
-import { PhotoSheet } from "../notebook/NotebookSheets";
+import { LooseNoteSheet, PhotoSheet } from "../notebook/NotebookSheets";
 import { QuoteCardSheet, type CardSource } from "../notebook/QuoteCardSheet";
 import { FormatSheet } from "./FormatSheet";
 import {
@@ -181,6 +181,9 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
   const [loc, setLoc] = useState<ViewLocation | null>(null);
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [editing, setEditing] = useState<Highlight | null>(null);
+  /** Marcas encimadas en el punto tocado (para elegir cuál editar). */
+  const [tapped, setTapped] = useState<string[]>([]);
+  const [noteSheet, setNoteSheet] = useState<{ note: LooseNote | null } | null>(null);
   const [rsvp, setRsvp] = useState<{ blocks: RsvpBlock[] } | null>(null);
   const [tool, setTool] = useState<Tool>(null);
   const [notebookOpen, setNotebookOpen] = useState(false);
@@ -503,7 +506,13 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
 
   // --- Cuaderno, dibujo y recortes ---------------------------------------------------
   const percentOf = (chapter: number, fraction: number) => globalPercent(content, chapter, fraction);
-  const here = loc ? { chapter: loc.chapter, fraction: loc.fraction, percent, label: chapterTitle(loc.chapter) } : undefined;
+  const hereLabel = loc ? chapterTitle(loc.chapter) : "";
+  // Memorizado: las hojas de notas reinician su texto si este objeto cambia.
+  const here = useMemo(
+    () => (loc ? { chapter: loc.chapter, fraction: loc.fraction, percent, label: hereLabel } : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [loc?.chapter, loc?.fraction, percent, hereLabel]
+  );
 
   const openTool = (t: Tool) => {
     stopTts();
@@ -676,7 +685,10 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
           }}
           onPageTurn={pageTurned}
           onReachEnd={onReachEnd}
-          onHighlightTap={(id) => setEditing(highlights.find((h) => h.id === id) ?? null)}
+          onHighlightTap={(ids) => {
+            setTapped(ids);
+            setEditing(highlights.find((h) => h.id === ids[0]) ?? null);
+          }}
           onSelection={(s) => {
             setSelection(s);
             if (s) setMenu(false);
@@ -877,6 +889,16 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
           setSheet(null);
           setNotebookOpen(true);
         }}
+        onEditNote={(note) => {
+          setSheet(null);
+          setNoteSheet({ note });
+        }}
+        onGoNote={(n) => {
+          if (n.chapter === undefined) return;
+          setSheet(null);
+          setMenu(false);
+          viewRef.current?.goTo({ chapter: n.chapter, fraction: n.fraction ?? 0 });
+        }}
       />
 
       <FormatSheet
@@ -961,10 +983,16 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
       <HighlightSheet
         highlight={editing}
         bookTitle={book.title}
-        onClose={() => setEditing(null)}
+        others={tapped}
+        onSwitch={setEditing}
+        onClose={() => {
+          setEditing(null);
+          setTapped([]);
+        }}
         onCard={(h) => setCard({ text: h.text, title: book.title, author: book.author, highlight: h })}
       />
       <QuoteCardSheet source={card} onClose={() => setCard(null)} />
+      <LooseNoteSheet open={!!noteSheet} bookId={book.id} note={noteSheet?.note ?? null} here={here} onClose={() => setNoteSheet(null)} />
       <PhotoSheet
         item={savedClip ? { kind: "clip", data: savedClip } : null}
         bookTitle={book.title}

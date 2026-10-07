@@ -4,6 +4,7 @@ import type { BookMeta, ReadingLocation } from "../books/types";
 import { deleteCover, deleteFile, deleteMedia, getKV, setKV } from "../lib/db";
 import { findWishFor, isActiveItem, moveActive } from "../notes/readingList";
 import { resolveNotebook, type EntryKind } from "../notes/notebook";
+import { applyMarkEdit, isEmptyEdit, type MarkEdit } from "../notes/markEdit";
 import { dayKey, debounce, uid } from "../lib/util";
 import { emitStoreEvent } from "./events";
 import {
@@ -60,6 +61,8 @@ interface Actions {
   addHighlight: (h: Omit<Highlight, "id" | "createdAt">) => Highlight;
   updateHighlight: (id: string, patch: Partial<Highlight>) => void;
   removeHighlight: (id: string) => void;
+  /** Quita y agrega marcas de una vez (poner o quitar formas en un tramo de texto). */
+  editHighlights: (edit: MarkEdit) => void;
   addDrawing: (d: Omit<Drawing, "id" | "createdAt" | "updatedAt">) => Drawing;
   updateDrawing: (id: string, patch: Partial<Drawing>) => void;
   addClip: (c: Omit<Clip, "id" | "createdAt">) => Clip;
@@ -314,6 +317,12 @@ export const useStore = create<Store>((set, get) => {
       set({ highlights: get().highlights.map((h) => (h.id === id ? { ...h, ...patch } : h)) }),
 
     removeHighlight: (id) => set({ highlights: get().highlights.filter((h) => h.id !== id) }),
+
+    editHighlights: (edit) => {
+      if (isEmptyEdit(edit)) return;
+      set({ highlights: applyMarkEdit(get().highlights, edit) });
+      if (edit.into.length > edit.out.length) get().checkAchievements();
+    },
 
     addDrawing: (d) => {
       const now = Date.now();

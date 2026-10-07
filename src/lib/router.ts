@@ -11,7 +11,6 @@ export type Route =
   | { name: "profile"; username?: string }
   | { name: "progress" }
   | { name: "settings" }
-  | { name: "notebooks" }
   | { name: "notebook"; bookId: string }
   | { name: "readingList" };
 
@@ -35,10 +34,9 @@ export function parseHash(hash: string): Route {
       return { name: "progress" };
     case "ajustes":
       return { name: "settings" };
-    case "cuadernos":
-      return { name: "notebooks" };
     case "cuaderno":
-      return parts[1] ? { name: "notebook", bookId: parts[1] } : { name: "notebooks" };
+      // Los cuadernos viven junto a sus libros, en la biblioteca.
+      return parts[1] ? { name: "notebook", bookId: parts[1] } : { name: "library" };
     case "por-leer":
       return { name: "readingList" };
     default:
@@ -62,8 +60,6 @@ export function routeToHash(r: Route): string {
       return "#/progreso";
     case "settings":
       return "#/ajustes";
-    case "notebooks":
-      return "#/cuadernos";
     case "notebook":
       return `#/cuaderno/${encodeURIComponent(r.bookId)}`;
     case "readingList":
@@ -84,7 +80,7 @@ export function useRoute(): Route {
 }
 
 const isTopLevel = (r: Route) =>
-  r.name === "library" || r.name === "notebooks" || r.name === "train" || r.name === "community" || r.name === "progress" || r.name === "settings";
+  r.name === "library" || r.name === "train" || r.name === "community" || r.name === "progress" || r.name === "settings";
 
 /** Navega. Entre pestañas reemplaza el historial; hacia adentro lo apila. */
 export function navigate(r: Route, opts: { replace?: boolean } = {}): void {

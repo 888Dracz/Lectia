@@ -192,10 +192,14 @@ export function LooseNoteSheet({
             className="btn btn-danger btn-sm"
             onClick={() => {
               useStore.getState().discardEntry("note", note.id);
+              toast("Nota borrada", {
+                icon: "🗑️",
+                action: { label: "Deshacer", run: () => useStore.getState().restoreEntry("note", note.id) },
+              }, 5000);
               onClose();
             }}
           >
-            <Trash2 size={16} /> Descartar
+            <Trash2 size={16} /> Borrar nota
           </button>
         )}
         <span className="spacer" />

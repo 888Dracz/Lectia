@@ -1,4 +1,4 @@
-import { ChartColumn, Dumbbell, Library, NotebookText, Settings, Trophy } from "lucide-react";
+import { ChartColumn, Dumbbell, Library, Settings, Trophy } from "lucide-react";
 import { useEffect } from "react";
 import { goBack, navigate, useRoute, type Route } from "./lib/router";
 import { useCommunity } from "./community/store";
@@ -12,7 +12,6 @@ import { GameScreen } from "./ui/games/GameScreen";
 import { TrainScreen } from "./ui/games/TrainScreen";
 import { LibraryScreen } from "./ui/library/LibraryScreen";
 import { openBook } from "./ui/library/useOpenBook";
-import { NotebooksScreen } from "./ui/notebook/NotebooksScreen";
 import { NotebookView } from "./ui/notebook/NotebookView";
 import { setPendingJump } from "./ui/reader/jump";
 import { ReadingListScreen } from "./ui/readinglist/ReadingListScreen";
@@ -38,8 +37,7 @@ function useAppTheme() {
 }
 
 const TABS: { route: Route; label: string; icon: React.ReactNode; match: Route["name"][] }[] = [
-  { route: { name: "library" }, label: "Biblioteca", icon: <Library size={22} />, match: ["library", "readingList"] },
-  { route: { name: "notebooks" }, label: "Cuadernos", icon: <NotebookText size={22} />, match: ["notebooks", "notebook"] },
+  { route: { name: "library" }, label: "Biblioteca", icon: <Library size={22} />, match: ["library", "readingList", "notebook"] },
   { route: { name: "train" }, label: "Entrenar", icon: <Dumbbell size={22} />, match: ["train", "game"] },
   { route: { name: "community", tab: "league" }, label: "Comunidad", icon: <Trophy size={22} />, match: ["community", "profile"] },
   { route: { name: "progress" }, label: "Progreso", icon: <ChartColumn size={22} />, match: ["progress"] },
@@ -85,8 +83,8 @@ function NotebookRoute({ bookId }: { bookId: string }) {
         <div className="empty">
           <h2>Este cuaderno ya no existe</h2>
           <div className="actions">
-            <button className="btn btn-primary" onClick={() => navigate({ name: "notebooks" }, { replace: true })}>
-              Ver mis cuadernos
+            <button className="btn btn-primary" onClick={() => navigate({ name: "library" }, { replace: true })}>
+              Ir a la biblioteca
             </button>
           </div>
         </div>
@@ -96,7 +94,7 @@ function NotebookRoute({ bookId }: { bookId: string }) {
   return (
     <NotebookView
       bookId={bookId}
-      onBack={() => goBack({ name: "notebooks" })}
+      onBack={() => goBack({ name: "library" })}
       onGo={(target) => {
         setPendingJump(bookId, target);
         openBook(bookId);
@@ -134,7 +132,6 @@ export function App() {
       {route.name === "community" && <CommunityScreen tab={route.tab} />}
       {route.name === "profile" && <ProfileScreen key={route.username ?? ""} username={route.username} />}
       {route.name === "progress" && <ProgressScreen />}
-      {route.name === "notebooks" && <NotebooksScreen />}
       {route.name === "notebook" && <NotebookRoute key={route.bookId} bookId={route.bookId} />}
       {route.name === "readingList" && <ReadingListScreen />}
       {route.name === "settings" && <SettingsScreen />}

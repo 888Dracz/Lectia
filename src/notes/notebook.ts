@@ -212,6 +212,23 @@ export function resolveNotebook(
   };
 }
 
+/** Lo que se muestra en la biblioteca: libros y, si se quiere, el cuaderno de cada uno a su lado. */
+export type ShelfItem<B> = { kind: "book"; book: B } | { kind: "notebook"; bookId: string };
+
+/**
+ * Pone el cuaderno de cada libro justo después del libro (solo si tiene notas o
+ * se creó a propósito). Los cuadernos de libros borrados van al final.
+ */
+export function withNotebooks<B extends { id: string }>(books: B[], hasNotebook: (bookId: string) => boolean, orphans: string[] = []): ShelfItem<B>[] {
+  const out: ShelfItem<B>[] = [];
+  for (const book of books) {
+    out.push({ kind: "book", book });
+    if (hasNotebook(book.id)) out.push({ kind: "notebook", bookId: book.id });
+  }
+  for (const bookId of orphans) out.push({ kind: "notebook", bookId });
+  return out;
+}
+
 /** La frase del día: un subrayado elegido de forma estable para cada fecha. */
 export function quoteOfTheDay(highlights: Highlight[], day: string): Highlight | undefined {
   const live = highlights.filter((h) => !h.discardedAt && h.text.trim().length >= 3 && h.text.length <= 420);

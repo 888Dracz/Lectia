@@ -1,13 +1,14 @@
-import { Bookmark, NotebookPen, NotebookText, Trash } from "lucide-react";
+import { Bookmark, Eraser, NotebookPen, NotebookText, Plus, StickyNote, Trash } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { BookContent, BookMeta } from "../../books/types";
 import { formatDate } from "../../lib/util";
-import { markStyleInfo } from "../../notes/marks";
-import type { Bookmark as BookmarkT, Highlight } from "../../store/state";
+import { markStyleInfo, NOTE_TINTS } from "../../notes/marks";
+import type { Bookmark as BookmarkT, Highlight, LooseNote } from "../../store/state";
 import { useStore } from "../../store/store";
+import { toast } from "../../store/ui";
 import { Segmented } from "../components/controls";
 import { Sheet } from "../components/Sheet";
-import { MarkSample } from "./Annotations";
+import { discardHighlight, MarkSample } from "./Annotations";
 import { HIGHLIGHT_COLORS } from "./themes";
 
 interface Props {
@@ -21,12 +22,25 @@ interface Props {
   onGoHighlight: (h: Highlight) => void;
   onEditHighlight: (h: Highlight) => void;
   onOpenNotebook: () => void;
+  /** Abre una nota suelta para editarla (null: nota nueva). */
+  onEditNote: (n: LooseNote | null) => void;
+  onGoNote: (n: LooseNote) => void;
 }
 
-export function TocSheet({ open, onClose, book, content, currentChapter, onGoChapter, onGoBookmark, onGoHighlight, onEditHighlight, onOpenNotebook }: Props) {
+/** Borra una nota suelta (va a "Descartados" del cuaderno) con opción de deshacer. */
+function deleteLooseNote(n: LooseNote) {
+  useStore.getState().discardEntry("note", n.id);
+  toast("Nota borrada", {
+    icon: "🗑️",
+    action: { label: "Deshacer", run: () => useStore.getState().restoreEntry("note", n.id) },
+  }, 5000);
+}
+
+export function TocSheet({ open, onClose, book, content, currentChapter, onGoChapter, onGoBookmark, onGoHighlight, onEditHighlight, onOpenNotebook, onEditNote, onGoNote }: Props) {
   const [tab, setTab] = useState<"toc" | "marks" | "notes">("toc");
   const allBookmarks = useStore((s) => s.bookmarks);
   const allHighlights = useStore((s) => s.highlights);
+  const allNotes = useStore((s) => s.looseNotes);
   const removeBookmark = useStore((s) => s.removeBookmark);
   const bookmarks = useMemo(
     () => allBookmarks.filter((b) => b.bookId === book.id && !b.discardedAt).sort((a, b) => a.percent - b.percent),
@@ -36,6 +50,14 @@ export function TocSheet({ open, onClose, book, content, currentChapter, onGoCha
     () => allHighlights.filter((h) => h.bookId === book.id && !h.discardedAt).sort((a, b) => a.chapter - b.chapter || a.start - b.start),
     [allHighlights, book.id]
   );
+  const notes = useMemo(
+    () =>
+      allNotes
+        .filter((n) => n.bookId === book.id && !n.discardedAt)
+        .sort((a, b) => (a.percent ?? Infinity) - (b.percent ?? Infinity) || b.updatedAt - a.updatedAt),
+    [allNotes, book.id]
+  );
+  const noteCount = highlights.length + notes.length;
   const toc = content.toc;
   const currentTocIndex = useMemo(() => {
     let idx = -1;
@@ -56,7 +78,7 @@ export function TocSheet({ open, onClose, book, content, currentChapter, onGoCha
         options={[
           { value: "toc", label: "Contenido" },
           { value: "marks", label: `Marcadores${bookmarks.length ? ` · ${bookmarks.length}` : ""}` },
-          { value: "notes", label: `Notas${highlights.length ? ` · ${highlights.length}` : ""}` },
+          { value: "notes", label: `Notas${noteCount ? ` · ${noteCount}` : ""}` },
         ]}
       />
 
@@ -105,15 +127,44 @@ export function TocSheet({ open, onClose, book, content, currentChapter, onGoCha
 
       {tab === "notes" && (
         <div className="notes-list">
-          {highlights.length === 0 ? (
+          {noteCount === 0 ? (
             <div className="notes-empty">
               <NotebookPen size={30} />
               <p>Mantén pulsado el texto y arrastra para resaltar, subrayar, poner en negrita o agregar una nota.</p>
             </div>
           ) : null}
-          <button className="btn btn-outline btn-sm" style={{ alignSelf: "flex-start", marginBottom: 6 }} onClick={onOpenNotebook}>
-            <NotebookText size={16} /> Abrir el cuaderno completo
-          </button>
+          <div className="row notes-actions">
+            <button className="btn btn-outline btn-sm" onClick={() => onEditNote(null)}>
+              <Plus size={16} /> Nueva nota
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={onOpenNotebook}>
+              <NotebookText size={16} /> Cuaderno completo
+            </button>
+          </div>
+          {notes.map((n) => {
+            const tint = NOTE_TINTS[n.tint] ?? NOTE_TINTS.lemon;
+            return (
+              <div key={n.id} className="note-card sticky" style={{ ["--tint" as string]: tint.bg, ["--tint-ink" as string]: tint.ink }}>
+                <button className="note-main" onClick={() => onEditNote(n)}>
+                  <div className="note-head">
+                    <StickyNote size={14} />
+                    <span className="ellipsis">
+                      Nota · {n.chapter !== undefined ? chapterTitle(n.chapter) : formatDate(n.updatedAt)}
+                    </span>
+                  </div>
+                  <div className="note-text hand">{n.text}</div>
+                </button>
+                {n.chapter !== undefined && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => onGoNote(n)}>
+                    Ir
+                  </button>
+                )}
+                <button className="icon-btn" aria-label="Borrar nota" title="Borrar nota" onClick={() => deleteLooseNote(n)}>
+                  <Trash size={18} />
+                </button>
+              </div>
+            );
+          })}
           {highlights.map((h) => (
             <div key={h.id} className="note-card" style={{ ["--hl" as string]: HIGHLIGHT_COLORS[h.color].dot }}>
               <button className="note-main" onClick={() => onGoHighlight(h)}>
@@ -130,8 +181,11 @@ export function TocSheet({ open, onClose, book, content, currentChapter, onGoCha
                 </div>
                 {h.note && <div className="note-note">📝 {h.note}</div>}
               </button>
-              <button className="icon-btn" aria-label="Editar" onClick={() => onEditHighlight(h)}>
+              <button className="icon-btn" aria-label="Editar" title="Editar" onClick={() => onEditHighlight(h)}>
                 <NotebookPen size={18} />
+              </button>
+              <button className="icon-btn" aria-label="Quitar marca" title="Quitar marca" onClick={() => discardHighlight(h)}>
+                <Eraser size={18} />
               </button>
             </div>
           ))}

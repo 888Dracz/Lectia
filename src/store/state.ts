@@ -289,6 +289,8 @@ export interface AppSettings {
   dictionary: DictEntry[];
   /** Buscar en un diccionario en línea si la palabra no está en el propio. */
   onlineDictionary: boolean;
+  /** Mostrar el cuaderno de notas de cada libro a su lado en la biblioteca. */
+  notebooksInLibrary: boolean;
 }
 
 export type SyncProvider = "none" | "webdav" | "dropbox" | "gdrive" | "ftp";
@@ -482,6 +484,7 @@ export const DEFAULT_APP: AppSettings = {
   sync: { ...DEFAULT_SYNC },
   dictionary: [],
   onlineDictionary: true,
+  notebooksInLibrary: true,
 };
 
 export const DEFAULT_PROGRESS: Progress = {

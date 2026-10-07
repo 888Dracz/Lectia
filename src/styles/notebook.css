@@ -881,155 +881,29 @@
   overflow-y: auto;
 }
 
-/* ================= Pestaña Cuadernos ================= */
-.qotd {
-  position: relative;
-  margin-bottom: 26px;
-  padding: 18px 18px 10px;
-  border-radius: var(--r-l);
-  overflow: hidden;
-  background:
-    radial-gradient(90% 120% at 100% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%),
-    var(--surface);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-1);
+/* ================= Cuadernos en la biblioteca ================= */
+/* El cuaderno de cada libro aparece a su lado, del tamaño de una portada. */
+.nb-tile .nb-art,
+.nb-row .nb-art,
+.shelf-notebook .nb-art {
+  aspect-ratio: 2 / 3;
 }
 
-.qotd::before {
-  content: "“";
-  position: absolute;
-  right: 12px;
-  top: -34px;
-  font-family: var(--font-display);
-  font-size: 150px;
-  line-height: 1;
-  color: var(--accent);
-  opacity: 0.18;
-  pointer-events: none;
-}
-
-.qotd-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.qotd-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 7;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin-top: 10px;
-  text-align: left;
-  font-family: "Literata Variable", Georgia, serif;
-  font-style: italic;
-  font-size: 18px;
-  line-height: 1.6;
-}
-
-.qotd-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-
-.qotd-foot .ellipsis {
-  flex: 1;
-}
-
-.nb-shelf {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 26px 20px;
-  padding: 4px 6px 0 2px;
-}
-
-.nb-shelf-item {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  text-align: left;
-  min-width: 0;
-}
-
-.nb-shelf-item .nb-art {
-  transition: transform 0.25s var(--ease);
-}
-
-.nb-shelf-item:nth-child(3n + 1) .nb-art {
-  transform: rotate(-1deg);
-}
-
-.nb-shelf-item:nth-child(3n + 2) .nb-art {
-  transform: rotate(0.8deg);
-}
-
-.nb-shelf-item:active .nb-art {
-  transform: scale(0.96) rotate(-2deg);
-}
-
-.nb-shelf-meta {
-  min-width: 0;
-}
-
-.nb-shelf-book {
+.nb-tile .tile-title {
   font-family: "Caveat Variable", "Caveat", cursive;
   font-weight: 650;
-  font-size: 22px;
+  font-size: 19px;
   line-height: 1.05;
-  white-space: normal;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
 }
 
-.nb-shelf-sub {
-  font-size: 12px;
-  margin-top: 2px;
+.nb-row .row-title {
+  font-family: "Caveat Variable", "Caveat", cursive;
+  font-weight: 650;
+  font-size: 21px;
 }
 
-.nb-empty-stack {
-  position: relative;
-  width: 140px;
-  height: 120px;
-  margin: 0 auto 18px;
-}
-
-.nb-empty-stack span {
-  position: absolute;
-  bottom: 0;
-  width: 72px;
-  height: 98px;
-  border-radius: 4px 10px 10px 4px;
-  box-shadow: 0 10px 20px -8px rgba(0, 0, 0, 0.45);
-}
-
-.nb-empty-stack span:nth-child(1) {
-  left: 4px;
-  background: linear-gradient(150deg, #c0583a, #8e3a25);
-  transform: rotate(-12deg);
-}
-
-.nb-empty-stack span:nth-child(2) {
-  left: 34px;
-  background: linear-gradient(150deg, #3f7a55, #24503a);
-  transform: rotate(-2deg);
-  z-index: 1;
-}
-
-.nb-empty-stack span:nth-child(3) {
-  left: 64px;
-  background: linear-gradient(150deg, #2e3a6e, #1a2147);
-  transform: rotate(9deg);
+.shelf-notebook .nb-art {
+  width: 100%;
 }
 
 /* ================= Tarjetas de cita ================= */

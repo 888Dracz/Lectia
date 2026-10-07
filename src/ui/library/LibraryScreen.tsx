@@ -20,19 +20,33 @@ import { FORMAT_LABEL, type BookMeta } from "../../books/types";
 import { navigate } from "../../lib/router";
 import { fold } from "../../lib/text";
 import { dayKey, formatRelative, greeting } from "../../lib/util";
+import { entryCounts, resolveNotebook, withNotebooks, type ShelfItem } from "../../notes/notebook";
 import { levelFromXp, streakOf } from "../../store/gamification";
 import type { LibrarySort, LibraryView } from "../../store/state";
 import { useStore } from "../../store/store";
 import { Cover } from "../components/Cover";
-import { Bar, Ring } from "../components/controls";
+import { Bar, Ring, Switch } from "../components/controls";
 import { promptDialog } from "../components/Dialog";
 import { Sheet } from "../components/Sheet";
+import { NotebookCoverArt } from "../notebook/NotebookSheets";
 import { ReadingListStrip } from "../readinglist/ReadingListStrip";
 import { BookActionsSheet } from "./BookSheets";
 import { addWelcomeBook, BOOK_ACCEPT, pickFiles, runImport } from "./importFlow";
 import { formatRemaining, openBook, remainingMinutes } from "./useOpenBook";
 
 type Filter = "all" | "reading" | "unread" | "finished" | "fav" | string;
+type Item = ShelfItem<BookMeta>;
+const itemKey = (x: Item) => (x.kind === "book" ? x.book.id : `nb-${x.bookId}`);
+
+/** Cuántas entradas tiene el cuaderno de cada libro (y cuáles existen aunque el libro se haya borrado). */
+function useNotebookCounts() {
+  const highlights = useStore((s) => s.highlights);
+  const bookmarks = useStore((s) => s.bookmarks);
+  const drawings = useStore((s) => s.drawings);
+  const clips = useStore((s) => s.clips);
+  const looseNotes = useStore((s) => s.looseNotes);
+  return useMemo(() => entryCounts({ highlights, bookmarks, drawings, clips, looseNotes }), [highlights, bookmarks, drawings, clips, looseNotes]);
+}
 
 const SORT_LABEL: Record<LibrarySort, string> = {
   recent: "Leídos recientemente",
@@ -65,6 +79,8 @@ export function LibraryScreen() {
   const progress = useStore((s) => s.progress);
   const setApp = useStore((s) => s.setApp);
   const createCollection = useStore((s) => s.createCollection);
+  const notebooks = useStore((s) => s.notebooks);
+  const noteCounts = useNotebookCounts();
 
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -102,6 +118,21 @@ export function LibraryScreen() {
     if (q) list = list.filter((b) => fold(`${b.title} ${b.author}`).includes(q));
     return sortBooks(list, app.librarySort);
   }, [all, filter, query, app.librarySort]);
+
+  // Cada cuaderno, al lado de su libro, como si fuera otro libro más.
+  const items = useMemo<Item[]>(() => {
+    if (!app.notebooksInLibrary) return visible.map((book) => ({ kind: "book", book }));
+    const has = (id: string) => (noteCounts.get(id) ?? 0) > 0 || !!notebooks[id];
+    const q = fold(query.trim());
+    const orphans =
+      filter === "all"
+        ? Object.values(notebooks)
+            .filter((nb) => !books[nb.bookId] && (!q || fold(`${nb.name} ${nb.bookTitle} ${nb.bookAuthor}`).includes(q)))
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .map((nb) => nb.bookId)
+        : [];
+    return withNotebooks(visible, has, orphans);
+  }, [visible, app.notebooksInLibrary, noteCounts, notebooks, books, filter, query]);
 
   const streak = streakOf(progress);
   const today = progress.days[dayKey()];
@@ -253,24 +284,32 @@ export function LibraryScreen() {
             <ViewToggle value={app.libraryView} onChange={(v) => setApp({ libraryView: v })} />
           </div>
 
-          {visible.length === 0 ? (
+          {items.length === 0 ? (
             <div className="empty small">
               <p>{query ? "Ningún libro coincide con tu búsqueda." : "No hay libros aquí todavía."}</p>
               {filter.startsWith("col") && <p className="faint" style={{ marginTop: 6 }}>Mantén pulsado un libro → “Estanterías” para agregarlo.</p>}
             </div>
           ) : app.libraryView === "list" ? (
             <div className="book-list">
-              {visible.map((b) => (
-                <BookRow key={b.id} book={b} onMore={() => setActionsFor(b.id)} />
-              ))}
+              {items.map((x) =>
+                x.kind === "book" ? (
+                  <BookRow key={itemKey(x)} book={x.book} onMore={() => setActionsFor(x.book.id)} />
+                ) : (
+                  <NotebookRow key={itemKey(x)} bookId={x.bookId} count={noteCounts.get(x.bookId) ?? 0} />
+                )
+              )}
             </div>
           ) : app.libraryView === "shelf" ? (
-            <Shelves books={visible} onMore={setActionsFor} />
+            <Shelves items={items} onMore={setActionsFor} />
           ) : (
             <div className="book-grid">
-              {visible.map((b) => (
-                <BookTile key={b.id} book={b} onMore={() => setActionsFor(b.id)} />
-              ))}
+              {items.map((x) =>
+                x.kind === "book" ? (
+                  <BookTile key={itemKey(x)} book={x.book} onMore={() => setActionsFor(x.book.id)} />
+                ) : (
+                  <NotebookTile key={itemKey(x)} bookId={x.bookId} count={noteCounts.get(x.bookId) ?? 0} />
+                )
+              )}
             </div>
           )}
         </>
@@ -298,6 +337,13 @@ export function LibraryScreen() {
               {app.librarySort === k && <Check size={20} color="var(--accent)" />}
             </button>
           ))}
+          <div className="list-item">
+            <span className="li-main">
+              <div className="li-title">Cuadernos junto a sus libros</div>
+              <div className="li-sub">Las notas de cada libro aparecen a su lado, como otro libro</div>
+            </span>
+            <Switch on={app.notebooksInLibrary} onChange={(v) => setApp({ notebooksInLibrary: v })} label="Cuadernos junto a sus libros" />
+          </div>
         </div>
       </Sheet>
 
@@ -452,17 +498,21 @@ function BookRow({ book, onMore }: { book: BookMeta; onMore: () => void }) {
   );
 }
 
-function Shelves({ books, onMore }: { books: BookMeta[]; onMore: (id: string) => void }) {
-  const rows: BookMeta[][] = [];
-  for (let i = 0; i < books.length; i += 3) rows.push(books.slice(i, i + 3));
+function Shelves({ items, onMore }: { items: Item[]; onMore: (id: string) => void }) {
+  const rows: Item[][] = [];
+  for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
   return (
     <div className="shelves">
       {rows.map((row, i) => (
         <div className="shelf" key={i}>
           <div className="shelf-books">
-            {row.map((b) => (
-              <ShelfBook key={b.id} book={b} onMore={() => onMore(b.id)} />
-            ))}
+            {row.map((x) =>
+              x.kind === "book" ? (
+                <ShelfBook key={itemKey(x)} book={x.book} onMore={() => onMore(x.book.id)} />
+              ) : (
+                <ShelfNotebook key={itemKey(x)} bookId={x.bookId} />
+              )
+            )}
           </div>
           <div className="shelf-plank" />
         </div>
@@ -479,6 +529,65 @@ function ShelfBook({ book, onMore }: { book: BookMeta; onMore: () => void }) {
       {book.status === "reading" && (
         <span className="shelf-pct">{Math.round((book.location?.percent ?? 0) * 100)}%</span>
       )}
+    </button>
+  );
+}
+
+/** El cuaderno de un libro (con su nombre y tapa), aunque el libro ya no esté. */
+function useNotebookOf(bookId: string) {
+  const book = useStore((s) => s.books[bookId]);
+  const saved = useStore((s) => s.notebooks[bookId]);
+  return { book, nb: resolveNotebook(saved, bookId, book ?? (saved ? { title: saved.bookTitle, author: saved.bookAuthor } : undefined)) };
+}
+
+const openNotebook = (bookId: string) => navigate({ name: "notebook", bookId });
+const entriesLabel = (n: number) => (n ? `${n} ${n === 1 ? "nota" : "notas"}` : "En blanco");
+
+function NotebookTile({ bookId, count }: { bookId: string; count: number }) {
+  const { book, nb } = useNotebookOf(bookId);
+  return (
+    <div className="book-tile nb-tile">
+      <button className="tile-cover" onClick={() => openNotebook(bookId)} aria-label={`Abrir el cuaderno ${nb.name}`}>
+        <NotebookCoverArt nb={nb} />
+      </button>
+      <div className="tile-meta">
+        <div className="tile-text">
+          <div className="tile-title">{nb.name}</div>
+          <div className="tile-author">
+            {entriesLabel(count)}
+            {!book && " · libro borrado"}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotebookRow({ bookId, count }: { bookId: string; count: number }) {
+  const { book, nb } = useNotebookOf(bookId);
+  return (
+    <div className="book-row nb-row">
+      <button className="row-main" onClick={() => openNotebook(bookId)}>
+        <div className="row-cover">
+          <NotebookCoverArt nb={nb} small />
+        </div>
+        <div className="row-text">
+          <div className="row-title">{nb.name}</div>
+          <div className="row-author">Cuaderno · {book?.title ?? nb.bookTitle}</div>
+          <div className="row-foot">
+            <span className="faint">{entriesLabel(count)}</span>
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+function ShelfNotebook({ bookId }: { bookId: string }) {
+  const { nb } = useNotebookOf(bookId);
+  return (
+    <button className="shelf-book shelf-notebook" onClick={() => openNotebook(bookId)} aria-label={`Abrir el cuaderno ${nb.name}`}>
+      <NotebookCoverArt nb={nb} />
     </button>
   );
 }

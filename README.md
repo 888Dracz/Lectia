@@ -25,7 +25,10 @@ más (PWA).
   copiar y compartir citas.
 - **Remarcar texto de 6 formas**: resaltar, subrayar, ondular, **negrita**, recuadrar y
   tachar, en 6 colores, con nota. Se elige con un toque desde el menú de selección
-  (recuerda la última forma y color) y se cambia o **descarta** tocando el fragmento.
+  (recuerda la última forma y color) y se cambia o **quita** tocando el fragmento.
+  Funciona como un procesador de textos: al seleccionar algo ya marcado, sus formas
+  aparecen puestas y tocarlas otra vez las **quita** (también a medias: si quitas el
+  medio de un subrayado, queda partido en dos); *Quitar* borra todas, con *Deshacer*.
 - **Escribir a mano** sobre la página (botón *Dibujar*): pluma, marcador y borrador,
   8 tintas, 3 grosores, deshacer y rehacer. Con **formas perfectas**, los círculos,
   líneas y rectángulos hechos a mano quedan limpios. Los trazos se anclan al texto:
@@ -71,6 +74,9 @@ más (PWA).
 - Tira con los próximos libros en la biblioteca.
 
 ### 📓 Cuadernos
+- **Viven junto a su libro**: en la biblioteca, el cuaderno de cada libro aparece a su
+  lado como si fuera otro libro (se puede apagar en *Ordenar*), y dentro del lector,
+  en *Contenido → Notas*, se revisan, crean, editan y borran sus notas y marcas.
 - **Un cuaderno de notas por libro**, con el **nombre que quieras**, tapa de tela en
   8 colores, hojas rayadas, punteadas, cuadriculadas o lisas, y un sello.
 - Reúne todo: resaltados, subrayados, negritas, recuadros… **cada forma en su propia
@@ -80,7 +86,6 @@ más (PWA).
   recuperar desde *Descartados* (o vaciarlos).
 - **Tarjetas de cita**: comparte un fragmento como imagen (5 estilos, cuadrada o
   historia), con su forma de remarcado.
-- **Frase para hoy**: cada día rescata algo que subrayaste.
 - Exportar a Markdown, con o sin las imágenes (.zip). Si borras un libro, puedes
   conservar su cuaderno.
 
@@ -171,7 +176,7 @@ src/
   ui/
     library/      # Biblioteca, estanterías, hoja de cada libro
     reader/       # Lector: vista paginada, PDF, voz, RSVP, remarcados, dibujo, recortes, búsqueda
-    notebook/     # Cuadernos de notas y pestaña Cuadernos
+    notebook/     # Cuadernos de notas (se abren desde la biblioteca o el lector)
     readinglist/  # Lista por leer (arrastrar para ordenar)
     games/        # Pantalla Entrenar y minijuegos
     community/    # Liga, amigos, novedades, perfiles y cuenta
