@@ -122,12 +122,13 @@
   gap: 3px;
 }
 
-.nb-hero-book {
-  font-family: var(--font-display);
-  font-size: 22px;
-  font-weight: 620;
-  line-height: 1.15;
-  letter-spacing: -0.01em;
+.nb-hero-name {
+  font-family: "Caveat Variable", "Caveat", cursive;
+  font-size: 31px;
+  font-weight: 650;
+  line-height: 1.02;
+  color: var(--text);
+  overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -135,7 +136,11 @@
 }
 
 .nb-hero-author {
-  font-size: 14px;
+  font-size: 13.5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .nb-hero-stats {
@@ -977,8 +982,14 @@
 }
 
 .nb-shelf-book {
+  font-family: "Caveat Variable", "Caveat", cursive;
   font-weight: 650;
-  font-size: 14px;
+  font-size: 22px;
+  line-height: 1.05;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .nb-shelf-sub {

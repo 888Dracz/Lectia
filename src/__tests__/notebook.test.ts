@@ -102,5 +102,7 @@ describe("cuadernos", () => {
     expect(a).toBeDefined();
     expect(quoteOfTheDay(s.highlights, "2026-10-06")).toBe(a);
     expect(a?.discardedAt).toBeUndefined();
+    const short = [hl("s", "highlight", 0, 0, { text: "Hola" })];
+    expect(quoteOfTheDay(short, "2026-10-06")?.id).toBe("s");
   });
 });

@@ -113,7 +113,8 @@ export function NotebooksScreen() {
             <button key={x.id} className="nb-shelf-item" onClick={() => navigate({ name: "notebook", bookId: x.id })}>
               <NotebookCoverArt nb={x.nb} />
               <div className="nb-shelf-meta">
-                <div className="nb-shelf-book ellipsis">{x.book?.title ?? x.nb.bookTitle}</div>
+                <div className="nb-shelf-book ellipsis">{x.nb.name}</div>
+                <div className="faint nb-shelf-sub ellipsis">{x.book?.title ?? x.nb.bookTitle}</div>
                 <div className="faint nb-shelf-sub">
                   {x.count ? `${x.count} ${x.count === 1 ? "entrada" : "entradas"}` : "En blanco"}
                   {x.last ? ` · ${formatRelative(x.last)}` : ""}

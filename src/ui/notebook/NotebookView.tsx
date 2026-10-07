@@ -192,9 +192,11 @@ export function NotebookView({ bookId, content, here, onBack, onGo }: Props) {
 
   const statLine = [
     counts.highlight && `${counts.highlight} resaltado${counts.highlight === 1 ? "" : "s"}`,
-    counts.underline + counts.wavy && `${counts.underline + counts.wavy} subrayado${counts.underline + counts.wavy === 1 ? "" : "s"}`,
+    counts.underline && `${counts.underline} subrayado${counts.underline === 1 ? "" : "s"}`,
+    counts.wavy && `${counts.wavy} ondulado${counts.wavy === 1 ? "" : "s"}`,
     counts.bold && `${counts.bold} en negrita`,
     counts.box && `${counts.box} recuadro${counts.box === 1 ? "" : "s"}`,
+    counts.strike && `${counts.strike} tachado${counts.strike === 1 ? "" : "s"}`,
     counts.drawing && `${counts.drawing} trazo${counts.drawing === 1 ? "" : "s"}`,
     counts.clip && `${counts.clip} recorte${counts.clip === 1 ? "" : "s"}`,
     counts.note && `${counts.note} nota${counts.note === 1 ? "" : "s"}`,
@@ -242,9 +244,12 @@ export function NotebookView({ bookId, content, here, onBack, onGo }: Props) {
         <button className="nb-hero" onClick={() => setSettings(true)} aria-label="Personalizar cuaderno">
           <NotebookCoverArt nb={nb} />
           <div className="nb-hero-info">
-            <div className="eyebrow">Cuaderno de</div>
-            <div className="nb-hero-book">{title}</div>
-            {author && <div className="faint nb-hero-author">{author}</div>}
+            <div className="eyebrow">Cuaderno</div>
+            <div className="nb-hero-name">{nb.name}</div>
+            <div className="faint nb-hero-author">
+              {title}
+              {author ? ` · ${author}` : ""}
+            </div>
             <div className="nb-hero-stats">{statLine.length ? statLine.join(" · ") : "Aún en blanco"}</div>
             <span className="nb-hero-edit">
               <Palette size={14} /> Nombre y tapa

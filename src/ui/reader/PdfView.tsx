@@ -345,8 +345,8 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref
         return { x: x - o.left, y: y - o.top };
       },
       liveLayer: () => live,
-      // Un "em" de tinta equivale a una letra de unos 11 pt en la página.
-      emPx: () => holderBox(state.current.page).w / 44,
+      // Un "em" de tinta equivale más o menos a la letra de un libro en la página.
+      emPx: () => holderBox(state.current.page).w / 28,
       anchor: (points, widthPx, center) => {
         const o = origin();
         const page = pageAtY(center.y - o.top);

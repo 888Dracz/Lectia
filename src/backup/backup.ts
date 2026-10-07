@@ -82,7 +82,7 @@ export async function createBackup(
       strToU8(
         "Respaldo de Lectia · Lector.\n" +
           "Para restaurarlo: abre Lectia → Ajustes → Restaurar respaldo y elige este archivo.\n" +
-          "La carpeta libros/ contiene tus archivos originales.\n"
+          "La carpeta libros/ contiene tus archivos originales y medios/ las imágenes de tus cuadernos.\n"
       ),
       { level: 6 },
     ],

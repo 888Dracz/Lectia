@@ -237,6 +237,39 @@ export function rasterizeFlow(o: FlowRaster): { canvas: HTMLCanvasElement; text:
     }
   }
 
+  // Viñetas y números de las listas (no son texto del documento).
+  for (const li of Array.from(root.querySelectorAll("li"))) {
+    const cs = getComputedStyle(li);
+    if (cs.display !== "list-item" || cs.listStyleType === "none") continue;
+    const tw = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+    let first: Text | null = null;
+    for (let n = tw.nextNode() as Text | null; n; n = tw.nextNode() as Text | null) {
+      if (n.data.trim()) {
+        first = n;
+        break;
+      }
+    }
+    if (!first) continue;
+    const at = first.data.search(/\S/);
+    range.setStart(first, at);
+    range.setEnd(first, at + 1);
+    const r = range.getClientRects()[0];
+    if (!r) continue;
+    const line = local(r, origin);
+    if (!hit(line, region)) continue;
+    const ordered = li.parentElement?.tagName === "OL";
+    const index = ordered ? Array.from(li.parentElement!.children).indexOf(li) + ((li.parentElement as HTMLOListElement).start || 1) : 0;
+    const marker = ordered ? `${index}.` : cs.listStyleType === "square" ? "▪" : cs.listStyleType === "circle" ? "◦" : "•";
+    const fs = parseFloat(cs.fontSize) || 16;
+    ctx.font = `${cs.fontStyle} 400 ${cs.fontSize} ${cs.fontFamily}`;
+    ctx.fillStyle = cs.color;
+    const m = ctx.measureText(marker);
+    const asc = m.fontBoundingBoxAscent || fs * 0.8;
+    const desc = m.fontBoundingBoxDescent || fs * 0.22;
+    const liBox = local(li.getBoundingClientRect(), origin);
+    ctx.fillText(marker, liBox.x - m.width - fs * 0.5, line.y + (line.h - (asc + desc)) / 2 + asc);
+  }
+
   // 4. Líneas de los subrayados, por encima del texto, y los trazos a mano.
   for (const f of lines) f();
   if (o.ink?.length) paintInk(ctx, o.ink, dark);

@@ -214,7 +214,10 @@ export function resolveNotebook(
 
 /** La frase del día: un subrayado elegido de forma estable para cada fecha. */
 export function quoteOfTheDay(highlights: Highlight[], day: string): Highlight | undefined {
-  const pool = highlights.filter((h) => !h.discardedAt && h.text.length >= 20 && h.text.length <= 420);
+  const live = highlights.filter((h) => !h.discardedAt && h.text.trim().length >= 3 && h.text.length <= 420);
+  // Mejor una frase con cuerpo; si no hay, cualquier fragmento sirve.
+  const long = live.filter((h) => h.text.length >= 20);
+  const pool = long.length ? long : live;
   if (!pool.length) return undefined;
   return pool[hashString(day) % pool.length];
 }

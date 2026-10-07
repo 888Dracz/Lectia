@@ -27,11 +27,23 @@ En el botón **Aa** eliges la letra, el tamaño, el interlineado, los márgenes 
 
 Los PDF se pueden ver como páginas originales o en **modo texto**, que adapta el contenido a tu pantalla y permite subrayar, escuchar y usar la lectura rápida.
 
-## Subrayados, notas y marcadores
+## Remarcar, dibujar y recortar
 
-Mantén pulsada una palabra y arrastra para seleccionar un fragmento. Aparecerá un menú para **subrayar** con distintos colores, agregar una **nota**, copiar el texto o buscar su significado en el diccionario.
+Mantén pulsada una palabra y arrastra para seleccionar un fragmento. Aparecerá un menú para remarcarlo de seis formas: **resaltar**, **subrayar**, **ondular**, poner en **negrita**, **recuadrar** o **tachar**, en el color que quieras. Desde ahí también puedes agregar una **nota**, copiar el texto o buscar su significado. Toca un fragmento remarcado para cambiarlo o **descartarlo**.
 
-Todos tus subrayados y marcadores quedan en el índice, en las pestañas *Marcadores* y *Notas*, y puedes exportarlos como texto.
+En el menú de abajo, **Dibujar** te deja escribir a mano sobre la página: encierra palabras en círculos, haz flechas o subraya con el marcador. Con *formas perfectas* tus círculos y líneas quedan limpios.
+
+**Recortar** guarda una parte de la página como imagen, como una captura de pantalla, con su pie de foto.
+
+## Tu cuaderno de notas
+
+Cada libro tiene su propio **cuaderno**, con el nombre, la tapa y el tipo de hoja que tú elijas. Ábrelo con el ícono de cuaderno de arriba o desde la pestaña **Cuadernos**. Ahí aparece todo lo que remarcaste, separado según cómo lo hiciste, junto con tus trazos, recortes, notas sueltas y marcadores.
+
+Desde el cuaderno puedes volver a cualquier fragmento, compartir una cita como **tarjeta**, exportarlo todo o mandar a *Descartados* lo que ya no quieras.
+
+## Tu lista por leer
+
+En la biblioteca puedes armar tu **lista por leer**, con libros que ya tienes o que aún no. Arrastra cada libro para acomodar el orden en que quieres leerlos. Cuando termines uno, se tacha solo.
 
 ## Escuchar y leer rápido
 
@@ -57,7 +69,7 @@ En **Progreso** verás tu racha de días, tu meta diaria, los retos del día, cu
 
 ## Respaldo
 
-En **Ajustes → Respaldo** puedes guardar una copia de todo: tus libros, estanterías, posiciones de lectura, subrayados, notas, ajustes y progreso. El respaldo es un archivo .zip que puedes guardar en tu teléfono o en Google Drive, y restaurar en cualquier otro dispositivo.
+En **Ajustes → Respaldo** puedes guardar una copia de todo: tus libros, estanterías, posiciones de lectura, cuadernos (con sus recortes y trazos), tu lista por leer, ajustes y progreso. El respaldo es un archivo .zip que puedes guardar en tu teléfono o en Google Drive, y restaurar en cualquier otro dispositivo.
 
 Haz un respaldo de vez en cuando: si borras los datos del navegador, la app no podrá recuperar tu biblioteca sin él.
 
