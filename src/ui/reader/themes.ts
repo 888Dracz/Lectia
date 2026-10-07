@@ -75,9 +75,4 @@ export function readerFont(id: FontId): ReaderFont {
   return READER_FONTS.find((f) => f.id === id) ?? READER_FONTS[0];
 }
 
-export const HIGHLIGHT_COLORS = {
-  yellow: { light: "rgba(255, 214, 10, 0.42)", dark: "rgba(255, 200, 40, 0.32)", label: "Amarillo", dot: "#f5c518" },
-  green: { light: "rgba(80, 200, 120, 0.36)", dark: "rgba(80, 210, 130, 0.28)", label: "Verde", dot: "#4fc97a" },
-  blue: { light: "rgba(90, 160, 255, 0.34)", dark: "rgba(100, 160, 255, 0.3)", label: "Azul", dot: "#5aa0ff" },
-  pink: { light: "rgba(255, 110, 170, 0.32)", dark: "rgba(255, 120, 170, 0.3)", label: "Rosa", dot: "#ff6eaa" },
-} as const;
+export { HIGHLIGHT_COLORS } from "../../notes/marks";

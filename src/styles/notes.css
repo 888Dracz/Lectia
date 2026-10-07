@@ -1,0 +1,72 @@
+/* ================= Remarcados (lector, menús y cuadernos) ================= */
+.mk {
+  --mk-dot: #f5c518;
+  --mk-bg: color-mix(in srgb, var(--mk-dot) 42%, transparent);
+  --mk-line: color-mix(in srgb, var(--mk-dot) 78%, #000);
+  color: inherit;
+  background: none;
+  border-radius: 0.18em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  text-decoration-skip-ink: none;
+}
+
+:root[data-theme="dark"] .mk,
+.reader.dark .mk,
+.sel-menu .mk {
+  --mk-bg: color-mix(in srgb, var(--mk-dot) 32%, transparent);
+  --mk-line: var(--mk-dot);
+}
+
+.reader.light .mk {
+  --mk-bg: color-mix(in srgb, var(--mk-dot) 42%, transparent);
+  --mk-line: color-mix(in srgb, var(--mk-dot) 78%, #000);
+}
+
+.mk[data-c="yellow"] { --mk-dot: #f5c518; }
+.mk[data-c="green"] { --mk-dot: #4fc97a; }
+.mk[data-c="blue"] { --mk-dot: #5aa0ff; }
+.mk[data-c="pink"] { --mk-dot: #ff6eaa; }
+.mk[data-c="orange"] { --mk-dot: #ff9440; }
+.mk[data-c="violet"] { --mk-dot: #9d82ff; }
+
+.mk[data-s="highlight"] {
+  background: var(--mk-bg);
+  padding: 0.04em 0;
+}
+
+.mk[data-s="underline"] {
+  text-decoration: underline 0.11em var(--mk-line);
+  text-underline-offset: 0.2em;
+}
+
+.mk[data-s="wavy"] {
+  text-decoration: underline wavy 0.065em var(--mk-line);
+  text-underline-offset: 0.22em;
+}
+
+.mk[data-s="bold"] {
+  font-weight: 760;
+  color: color-mix(in srgb, var(--mk-line) 28%, currentColor);
+}
+
+.mk[data-s="box"] {
+  box-shadow: inset 0 0 0 0.085em var(--mk-line);
+  border-radius: 0.3em;
+  padding: 0.02em 0.14em;
+}
+
+.mk[data-s="strike"] {
+  text-decoration: line-through 0.09em var(--mk-line);
+}
+
+/* Letra manuscrita para notas y cuadernos */
+.hand {
+  font-family: "Caveat Variable", "Caveat", "Segoe Print", "Bradley Hand", cursive;
+}
+
+textarea.field.hand,
+input.field.hand {
+  font-size: 21px;
+  line-height: 1.25;
+}

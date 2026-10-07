@@ -8,7 +8,10 @@ export type Route =
   | { name: "train" }
   | { name: "game"; game: string }
   | { name: "progress" }
-  | { name: "settings" };
+  | { name: "settings" }
+  | { name: "notebooks" }
+  | { name: "notebook"; bookId: string }
+  | { name: "readingList" };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
@@ -21,6 +24,12 @@ export function parseHash(hash: string): Route {
       return { name: "progress" };
     case "ajustes":
       return { name: "settings" };
+    case "cuadernos":
+      return { name: "notebooks" };
+    case "cuaderno":
+      return parts[1] ? { name: "notebook", bookId: parts[1] } : { name: "notebooks" };
+    case "por-leer":
+      return { name: "readingList" };
     default:
       return { name: "library" };
   }
@@ -38,6 +47,12 @@ export function routeToHash(r: Route): string {
       return "#/progreso";
     case "settings":
       return "#/ajustes";
+    case "notebooks":
+      return "#/cuadernos";
+    case "notebook":
+      return `#/cuaderno/${encodeURIComponent(r.bookId)}`;
+    case "readingList":
+      return "#/por-leer";
     default:
       return "#/";
   }
@@ -53,7 +68,8 @@ export function useRoute(): Route {
   return parseHash(hash);
 }
 
-const isTopLevel = (r: Route) => r.name === "library" || r.name === "train" || r.name === "progress" || r.name === "settings";
+const isTopLevel = (r: Route) =>
+  r.name === "library" || r.name === "notebooks" || r.name === "train" || r.name === "progress" || r.name === "settings";
 
 /** Navega. Entre pestañas reemplaza el historial; hacia adentro lo apila. */
 export function navigate(r: Route, opts: { replace?: boolean } = {}): void {

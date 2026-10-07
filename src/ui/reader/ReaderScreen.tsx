@@ -6,11 +6,14 @@ import {
   ChevronsLeft,
   ChevronsRight,
   FileCode,
+  Crop,
   Headphones,
   Info,
   ListTree,
   Moon,
+  NotebookText,
   Pause,
+  PenLine,
   Play,
   ScreenShare,
   Search,
@@ -26,6 +29,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { setEngineOptions, engineKey } from "../../books/html";
+import { createPortal } from "react-dom";
 import { openBookContent } from "../../books/load";
 import {
   chapterSizes,
@@ -35,16 +39,22 @@ import {
   type BookMeta,
   type ReflowContent,
 } from "../../books/types";
-import { goBack, navigate } from "../../lib/router";
+import { goBack, navigate, useBackClose } from "../../lib/router";
 import { formatMinutes, minutesFor, readingWpm, remainingWords } from "../../lib/stats";
 import { clamp, debounce, formatNumber, safeStorage } from "../../lib/util";
-import type { Highlight, ReaderSettings, ToolId } from "../../store/state";
+import type { Clip, Highlight, ReaderSettings, ToolId } from "../../store/state";
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
 import { confirmDialog } from "../components/Dialog";
 import { Sheet } from "../components/Sheet";
 import { Range } from "../components/controls";
 import { HighlightSheet, SelectionMenu } from "./Annotations";
+import { CropTool } from "./CropTool";
+import { DrawMode } from "./DrawMode";
+import { takePendingJump } from "./jump";
+import { NotebookView } from "../notebook/NotebookView";
+import { PhotoSheet } from "../notebook/NotebookSheets";
+import { QuoteCardSheet, type CardSource } from "../notebook/QuoteCardSheet";
 import { FormatSheet } from "./FormatSheet";
 import {
   playPageSound,
@@ -58,7 +68,7 @@ import {
 } from "./hooks";
 import { BlueLightFilter, BookInfoSheet, EditViewSheet, FootnoteSheet, QuickAdjustSheet, ReadingRuler } from "./ReaderExtras";
 import { PdfView } from "./PdfView";
-import { ReflowView, type FootnoteInfo, type SelectionInfo, type ViewHandle, type ViewLocation } from "./ReflowView";
+import { ReflowView, type FootnoteInfo, type GoTarget, type SelectionInfo, type ViewHandle, type ViewLocation } from "./ReflowView";
 import { RsvpPlayer, type RsvpBlock, type RsvpResult } from "./RsvpPlayer";
 import { SearchSheet } from "./SearchSheet";
 import { readerFont, readerTheme } from "./themes";
@@ -67,6 +77,7 @@ import { listVoices, TtsController, ttsSupported } from "./tts";
 import { Cover } from "../components/Cover";
 
 type SheetName = null | "toc" | "format" | "search" | "end" | "tts" | "info" | "edit" | "brightness" | "fontSize";
+type Tool = null | "draw" | "crop";
 
 export function ReaderScreen({ bookId }: { bookId: string }) {
   const book = useStore((s) => s.books[bookId]);
@@ -139,7 +150,9 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
   const updateBook = useStore((s) => s.updateBook);
   const allHighlights = useStore((s) => s.highlights);
   const allBookmarks = useStore((s) => s.bookmarks);
+  const allDrawings = useStore((s) => s.drawings);
   const highlights = useMemo(() => allHighlights.filter((h) => h.bookId === book.id), [allHighlights, book.id]);
+  const drawings = useMemo(() => allDrawings.filter((d) => d.bookId === book.id && !d.discardedAt), [allDrawings, book.id]);
 
   const theme = readerTheme(settings.theme, settings.customTheme);
   const font = readerFont(settings.font);
@@ -169,6 +182,10 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
   const [selection, setSelection] = useState<SelectionInfo | null>(null);
   const [editing, setEditing] = useState<Highlight | null>(null);
   const [rsvp, setRsvp] = useState<{ blocks: RsvpBlock[] } | null>(null);
+  const [tool, setTool] = useState<Tool>(null);
+  const [notebookOpen, setNotebookOpen] = useState(false);
+  const [savedClip, setSavedClip] = useState<Clip | null>(null);
+  const [card, setCard] = useState<CardSource | null>(null);
   const [scrub, setScrub] = useState<number | null>(null);
   const [brightHint, setBrightHint] = useState(false);
   const [ttsState, setTtsState] = useState<{ active: boolean; playing: boolean }>({ active: false, playing: false });
@@ -211,12 +228,18 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
 
   useTiltPaging(settings.tiltPaging && !sheet, settings.tiltThreshold, () => viewRef.current?.next(), () => viewRef.current?.prev());
 
-  const initial = useMemo(
-    () => ({ chapter: clamp(book.location?.chapter ?? 0, 0, Math.max(0, totalChapters - 1)), fraction: book.location?.fraction ?? 0 }),
+  // Al llegar desde un cuaderno se abre justo en la nota elegida.
+  const [jump] = useState(() => takePendingJump(book.id));
+  const jumpUsed = useRef(false);
+  const initial = useMemo((): GoTarget => {
+    if (jump && !jumpUsed.current) {
+      jumpUsed.current = true;
+      return { ...jump, chapter: clamp(jump.chapter, 0, Math.max(0, totalChapters - 1)) };
+    }
+    return { chapter: clamp(book.location?.chapter ?? 0, 0, Math.max(0, totalChapters - 1)), fraction: book.location?.fraction ?? 0 };
     // Posición inicial solo al montar o al cambiar el modo de PDF.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [book.id, book.pdfMode]
-  );
+  }, [book.id, book.pdfMode]);
 
   const saveLocation = useMemo(
     () => debounce((l: ViewLocation, percent: number) => setLocation(book.id, { chapter: l.chapter, fraction: l.fraction, percent }), 400),
@@ -243,7 +266,7 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
   const pageBookmark = useMemo(() => {
     if (!loc) return undefined;
     return allBookmarks.find(
-      (b) => b.bookId === book.id && b.chapter === loc.chapter && Math.abs(b.fraction - loc.fraction) < 0.5 / Math.max(1, loc.pages)
+      (b) => b.bookId === book.id && !b.discardedAt && b.chapter === loc.chapter && Math.abs(b.fraction - loc.fraction) < 0.5 / Math.max(1, loc.pages)
     );
   }, [allBookmarks, book.id, loc]);
 
@@ -478,6 +501,25 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
     return `Cap. ${ch} · Libro ${bk}`;
   }, [settings.timeLeft, loc, book, content.kind, pdfPages, sizes, percent]);
 
+  // --- Cuaderno, dibujo y recortes ---------------------------------------------------
+  const percentOf = (chapter: number, fraction: number) => globalPercent(content, chapter, fraction);
+  const here = loc ? { chapter: loc.chapter, fraction: loc.fraction, percent, label: chapterTitle(loc.chapter) } : undefined;
+
+  const openTool = (t: Tool) => {
+    stopTts();
+    setMenu(false);
+    setSelection(null);
+    window.getSelection()?.removeAllRanges();
+    setTool(t);
+  };
+
+  const goTarget = (t: GoTarget) => {
+    setNotebookOpen(false);
+    setMenu(false);
+    if (pdfPages) viewRef.current?.goTo({ chapter: t.chapter, fraction: "fraction" in t ? t.fraction ?? 0 : 0 });
+    else viewRef.current?.goTo(t);
+  };
+
   const cssVars = {
     ["--rd-bg" as string]: theme.bg,
     ["--rd-fg" as string]: theme.fg,
@@ -511,7 +553,7 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
       ? `Página ${Math.round(scrubValue) + 1}`
       : `${chapterTitle(locationFromPercent(sizes, scrubValue).chapter)} · ${Math.round(scrubValue * 100)}%`;
 
-  function tool(id: ToolId): { icon: React.ReactNode; label: string; run: () => void; disabled?: boolean; active?: boolean } {
+  function toolbarItem(id: ToolId): { icon: React.ReactNode; label: string; run: () => void; disabled?: boolean; active?: boolean } {
     const go = (f: () => void) => () => {
       setMenu(false);
       f();
@@ -575,6 +617,10 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         return { icon: <Info size={22} />, label: "Info", run: () => setSheet("info") };
       case "edit":
         return { icon: <FileCode size={22} />, label: "Edición", run: () => setSheet("edit"), disabled: !flow || !!flow.fixedLayout };
+      case "draw":
+        return { icon: <PenLine size={22} />, label: "Dibujar", run: () => openTool("draw") };
+      case "crop":
+        return { icon: <Crop size={22} />, label: "Recortar", run: () => openTool("crop") };
     }
   }
 
@@ -595,8 +641,10 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
           ref={viewRef}
           content={content}
           settings={settings}
-          initial={initial}
+          initial={{ chapter: initial.chapter, fraction: "fraction" in initial ? initial.fraction ?? 0 : 0 }}
           pdfFilter={theme.pdfFilter}
+          drawings={drawings}
+          locked={!!tool}
           menuOpen={menu}
           onLocation={onLocation}
           onCenterTap={() => setMenu((m) => !m)}
@@ -612,6 +660,9 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
           settings={settings}
           initial={initial}
           highlights={highlights}
+          drawings={drawings}
+          paper={{ bg: theme.bg, dark: theme.dark }}
+          locked={!!tool}
           menuOpen={menu}
           onLocation={onLocation}
           onCenterTap={() => {
@@ -687,6 +738,9 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         <button className="icon-btn" onClick={() => setSheet("info")} aria-label="Información del libro">
           <Info size={21} />
         </button>
+        <button className="icon-btn" onClick={() => setNotebookOpen(true)} aria-label="Cuaderno de notas">
+          <NotebookText size={21} />
+        </button>
         <button className="icon-btn" onClick={() => setSheet("search")} aria-label="Buscar">
           <Search size={21} />
         </button>
@@ -733,7 +787,7 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         )}
         <div className={`rd-actions ${settings.toolbarRows === 2 ? "two-rows" : ""}`}>
           {settings.toolbarItems.map((id) => {
-            const t = tool(id);
+            const t = toolbarItem(id);
             return (
               <button key={id} className={`rd-action ${t.active ? "active" : ""}`} onClick={t.run} disabled={t.disabled}>
                 {t.icon}
@@ -758,13 +812,42 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         </div>
       )}
 
-      {selection && !menu && (
+      {selection && !menu && !tool && (
         <SelectionMenu
           sel={selection}
           bookId={book.id}
           bookTitle={book.title}
+          percent={percentOf(selection.chapter, selection.fraction)}
           onDone={() => setSelection(null)}
           onEditHighlight={(h) => setEditing(h)}
+        />
+      )}
+
+      {tool === "draw" && (
+        <DrawMode
+          surface={() => viewRef.current?.ink() ?? null}
+          bookId={book.id}
+          where={(chapter) =>
+            loc && chapter === loc.chapter && !pdfPages
+              ? { fraction: loc.fraction, percent }
+              : { fraction: 0, percent: percentOf(chapter, 0) }
+          }
+          onPrev={() => viewRef.current?.prev()}
+          onNext={() => viewRef.current?.next()}
+          onClose={() => setTool(null)}
+        />
+      )}
+
+      {tool === "crop" && (
+        <CropTool
+          surface={() => viewRef.current?.ink() ?? null}
+          bookId={book.id}
+          percentOf={percentOf}
+          onClose={() => setTool(null)}
+          onSaved={(clip) => {
+            setTool(null);
+            setSavedClip(clip);
+          }}
         />
       )}
 
@@ -789,6 +872,10 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         onEditHighlight={(h) => {
           setSheet(null);
           setEditing(h);
+        }}
+        onOpenNotebook={() => {
+          setSheet(null);
+          setNotebookOpen(true);
         }}
       />
 
@@ -871,7 +958,26 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         onChange={setReader}
       />
 
-      <HighlightSheet highlight={editing} bookTitle={book.title} onClose={() => setEditing(null)} />
+      <HighlightSheet
+        highlight={editing}
+        bookTitle={book.title}
+        onClose={() => setEditing(null)}
+        onCard={(h) => setCard({ text: h.text, title: book.title, author: book.author, highlight: h })}
+      />
+      <QuoteCardSheet source={card} onClose={() => setCard(null)} />
+      <PhotoSheet
+        item={savedClip ? { kind: "clip", data: savedClip } : null}
+        bookTitle={book.title}
+        place={savedClip ? `Guardado en tu cuaderno · ${chapterTitle(savedClip.chapter)}` : ""}
+        onClose={() => {
+          const kept = useStore.getState().clips.find((c) => c.id === savedClip?.id && !c.discardedAt);
+          setSavedClip(null);
+          if (kept) toast("Recorte guardado en tu cuaderno", { icon: "✂️", tone: "success", action: { label: "Ver", run: () => setNotebookOpen(true) } }, 4000);
+        }}
+      />
+      <NotebookOverlay open={notebookOpen} onClose={() => setNotebookOpen(false)}>
+        <NotebookView bookId={book.id} content={content} here={here} onBack={() => setNotebookOpen(false)} onGo={goTarget} />
+      </NotebookOverlay>
 
       <Sheet open={sheet === "end"} onClose={() => setSheet(null)}>
         <div className="end-sheet">
@@ -907,6 +1013,13 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
       )}
     </div>
   );
+}
+
+/** El cuaderno abierto encima del libro (sin salir del lector). */
+function NotebookOverlay({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) {
+  useBackClose(open, onClose);
+  if (!open) return null;
+  return createPortal(<div className="nb-overlay">{children}</div>, document.body);
 }
 
 /** Aplica el salto del deslizador al soltarlo. */

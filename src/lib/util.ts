@@ -84,6 +84,10 @@ export function formatNumber(n: number): string {
   return Math.round(n).toLocaleString("es");
 }
 
+export function capitalize(s: string): string {
+  return s ? s[0].toUpperCase() + s.slice(1) : s;
+}
+
 export function pluralize(n: number, one: string, many: string): string {
   return `${formatNumber(n)} ${n === 1 ? one : many}`;
 }

@@ -1,6 +1,7 @@
 // Lógica pura de la gamificación: niveles, rangos, rachas, logros y retos.
 import { addDays, dayKey, parseDayKey } from "../lib/util";
 import type { BookMeta } from "../books/types";
+import { defaultNotebookName } from "../notes/notebook";
 import type { DayStats, PersistedState } from "./state";
 
 export const RANKS = [
@@ -132,6 +133,11 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: "schulte-fast", title: "Visión de halcón", description: "Completa la tabla 5×5 en menos de 25 s", icon: "🦅", xp: 50, check: (c) => (c.state.progress.games.schulte?.best ?? 0) >= 1000 - 25 * 10 },
   { id: "night-owl", title: "Búho nocturno", description: "Lee después de medianoche", icon: "🦉", xp: 15, check: () => false },
   { id: "early-bird", title: "Madrugador", description: "Lee antes de las 7 de la mañana", icon: "🐦", xp: 15, check: () => false },
+  { id: "first-ink", title: "Trazo libre", description: "Escribe o dibuja a mano sobre una página", icon: "✍️", xp: 15, check: (c) => c.state.drawings.length >= 1 },
+  { id: "clipper", title: "Tijeras de oro", description: "Guarda 5 recortes en tus cuadernos", icon: "✂️", xp: 25, check: (c) => c.state.clips.length >= 5 },
+  { id: "named-notebook", title: "Con nombre propio", description: "Ponle nombre a uno de tus cuadernos", icon: "📓", xp: 15, check: (c) => Object.values(c.state.notebooks).some((n) => n.name.trim() !== defaultNotebookName(n.bookTitle)) },
+  { id: "reading-list", title: "Lo que viene", description: "Arma una lista por leer con 5 libros", icon: "🗒️", xp: 20, check: (c) => c.state.readingList.length >= 5 },
+  { id: "list-done", title: "¡Tachado!", description: "Termina un libro de tu lista por leer", icon: "✅", xp: 30, check: (c) => c.state.readingList.some((i) => !!i.doneAt) },
   { id: "backup", title: "A salvo", description: "Haz tu primer respaldo", icon: "🛟", xp: 20, check: (c) => !!c.state.app.lastBackupAt },
 ];
 

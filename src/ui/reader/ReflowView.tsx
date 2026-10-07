@@ -4,9 +4,20 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { ReflowContent } from "../../books/types";
 import { clamp } from "../../lib/util";
-import type { Highlight, ReaderSettings } from "../../store/state";
+import { bbox, intersects, padBox, strokeHit, transformPoints, unionBox, type Box } from "../../notes/ink";
+import { canvasToBlob, rasterizeFlow } from "../../notes/raster";
+import type { Drawing, Highlight, ReaderSettings } from "../../store/state";
 import { applyFocusMarks, footnoteOf, isNoteLink } from "./focus";
 import { offsetOf, pointAt, rangeFromOffsets, readingBlocks, textNodes, unwrapMarks, wrapOffsets } from "./dom";
+import {
+  captureScale,
+  caretOffsetAt,
+  inkPathHtml,
+  nearestVisibleChar,
+  toPaint,
+  type CachedStroke,
+  type InkSurface,
+} from "./inkSurface";
 
 export interface ViewLocation {
   chapter: number;
@@ -39,6 +50,8 @@ export interface SelectionInfo {
   chapter: number;
   start: number;
   end: number;
+  /** Posición del fragmento dentro del capítulo (0–1). */
+  fraction: number;
   text: string;
   rect: { top: number; bottom: number; left: number; right: number };
 }
@@ -58,13 +71,21 @@ export interface ViewHandle {
   showElement(el: HTMLElement): void;
   nextChapter(): boolean;
   currentChapter(): number;
+  /** Superficie para escribir a mano y recortar (null si no está lista). */
+  ink(): InkSurface | null;
 }
 
 interface Props {
   content: ReflowContent;
   settings: ReaderSettings;
-  initial: { chapter: number; fraction: number };
+  initial: GoTarget;
   highlights: Highlight[];
+  /** Trazos a mano de este libro (vista de texto). */
+  drawings: Drawing[];
+  /** Fondo y tono del tema (para los recortes). */
+  paper: { bg: string; dark: boolean };
+  /** Mientras se dibuja o recorta, los toques no pasan página. */
+  locked: boolean;
   menuOpen: boolean;
   onLocation: (l: ViewLocation) => void;
   onCenterTap: () => void;
@@ -104,6 +125,9 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
   const viewportRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const inkSavedRef = useRef<SVGGElement>(null);
+  const inkLiveRef = useRef<SVGGElement>(null);
+  const inkCache = useRef(new Map<string, CachedStroke>());
 
   const st = useRef({
     chapter: props.initial.chapter,
@@ -115,7 +139,7 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     rendered: -1,
     dual: false,
     pbs: [] as { pos: number; label: string }[],
-    target: { kind: "fraction", value: props.initial.fraction } as Target | null,
+    target: toTarget(props.initial) as Target | null,
   });
 
   const [request, setRequest] = useState(props.initial.chapter);
@@ -220,6 +244,65 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     return rects[0] ?? r.getBoundingClientRect();
   };
 
+  // --- Escritura a mano ---------------------------------------------------------
+  const fontPx = () => parseFloat(getComputedStyle(contentRef.current ?? document.body).fontSize) || p.current.settings.fontSize;
+
+  /** Dibuja los trazos guardados del capítulo, anclados a su texto. */
+  const paintInk = () => {
+    const g = inkSavedRef.current;
+    const el = contentRef.current;
+    const cols = colsRef.current;
+    const cache = inkCache.current;
+    cache.clear();
+    if (!g || !el || !cols) return;
+    const s = st.current;
+    if (s.rendered < 0) {
+      g.innerHTML = "";
+      return;
+    }
+    const origin = cols.getBoundingClientRect();
+    const fs = fontPx();
+    const W = s.W || cols.clientWidth;
+    const anchors = new Map<number, { x: number; y: number } | null>();
+    let html = "";
+    for (const d of p.current.drawings) {
+      if (d.chapter !== s.rendered || d.discardedAt || d.view !== "flow") continue;
+      for (const k of d.strokes) {
+        let pts: number[];
+        let width: number;
+        if (k.anchor.kind === "text") {
+          const off = k.anchor.offset;
+          let a = anchors.get(off);
+          if (a === undefined) {
+            const r = rectOfOffset(off);
+            a = r ? { x: r.left - origin.left, y: r.top - origin.top } : null;
+            anchors.set(off, a);
+          }
+          if (!a) continue;
+          pts = transformPoints(k.points, a.x, a.y, fs);
+          width = k.width * fs;
+        } else {
+          pts = transformPoints(k.points, 0, 0, W);
+          width = k.width * W;
+        }
+        const entry: CachedStroke = {
+          drawingId: d.id,
+          pts,
+          width,
+          box: padBox(bbox(pts), width / 2),
+          tool: k.tool,
+          color: k.color,
+          straight: k.shape === "rect" || k.shape === "line",
+        };
+        cache.set(k.id, entry);
+        html += inkPathHtml(entry);
+      }
+    }
+    g.innerHTML = html;
+  };
+  const paintInkRef = useRef(paintInk);
+  paintInkRef.current = paintInk;
+
   const flash = (offset: number, length: number) => {
     const el = contentRef.current;
     if (!el || length <= 0) return;
@@ -319,6 +402,7 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
       report();
     }
     if (target.kind === "offset" && target.flash) flash(target.value, target.flash);
+    paintInkRef.current();
     el.style.opacity = "1";
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content, report, setPage]);
@@ -327,8 +411,8 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
   layoutRef.current = layout;
 
   // --- Pintado del capítulo y subrayados -------------------------------------
-  const chapterHighlights = loaded ? props.highlights.filter((h) => h.chapter === loaded.chapter) : [];
-  const hlKey = chapterHighlights.map((h) => `${h.id}:${h.color}:${h.start}:${h.end}:${h.note ? 1 : 0}`).join("|");
+  const chapterHighlights = loaded ? props.highlights.filter((h) => h.chapter === loaded.chapter && !h.discardedAt) : [];
+  const hlKey = chapterHighlights.map((h) => `${h.id}:${h.color}:${h.style}:${h.start}:${h.end}:${h.note ? 1 : 0}`).join("|");
 
   useLayoutEffect(() => {
     const el = contentRef.current;
@@ -338,13 +422,16 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     el.innerHTML = `${loaded.html}<div class="rd-end" aria-hidden="true"></div>`;
     const sorted = [...chapterHighlights].sort((a, b) => a.start - b.start);
     for (const h of sorted) {
-      wrapOffsets(el, h.start, h.end, () => {
+      const marks = wrapOffsets(el, h.start, h.end, () => {
         const m = document.createElement("mark");
+        m.className = "mk";
         m.dataset.hl = h.id;
         m.dataset.c = h.color;
-        if (h.note) m.dataset.note = "1";
+        m.dataset.s = h.style ?? "highlight";
         return m;
       });
+      // La nota se señala con un punto al final del fragmento.
+      if (h.note && marks.length) marks[marks.length - 1].dataset.note = "1";
     }
     const set = p.current.settings;
     applyFocusMarks(el, { bionic: set.bionic, ratio: set.bionicRatio, sentenceStart: set.sentenceStart });
@@ -382,6 +469,15 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     }
     if (changed) layoutRef.current();
   }
+
+  // Trazos nuevos, borrados o descartados → volver a dibujarlos.
+  const inkKey = props.drawings
+    .filter((d) => d.view === "flow" && d.chapter === loaded?.chapter)
+    .map((d) => `${d.id}:${d.updatedAt}:${d.discardedAt ?? 0}:${d.strokes.length}`)
+    .join("|");
+  useLayoutEffect(() => {
+    paintInkRef.current();
+  }, [inkKey]);
 
   // Cambios de formato → repaginar conservando la posición.
   const s0 = settings;
@@ -541,6 +637,113 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
           text: (b.textContent ?? "").replace(/\s+/g, " ").trim(),
         }));
       },
+      ink: (): InkSurface | null => {
+        const el = contentRef.current;
+        const cols = colsRef.current;
+        const vp = viewportRef.current;
+        const live = inkLiveRef.current;
+        if (!el || !cols || !vp || !live || st.current.rendered < 0) return null;
+        const origin = () => cols.getBoundingClientRect();
+        const visibleBox = (): Box => {
+          const o = origin();
+          const v = vp.getBoundingClientRect();
+          return { x: v.left - o.left, y: v.top - o.top, w: v.width, h: v.height };
+        };
+        const margin = () => (content.fixedLayout ? 0 : Math.min(p.current.settings.margin, st.current.W / 4));
+        const strokesIn = (region: Box) => [...inkCache.current.values()].filter((k) => intersects(k.box, region));
+        return {
+          view: "flow",
+          toLocal: (x, y) => {
+            const o = origin();
+            return { x: x - o.left, y: y - o.top };
+          },
+          liveLayer: () => live,
+          emPx: () => fontPx(),
+          anchor: (points, widthPx, center) => {
+            const s = st.current;
+            const W = s.W || cols.clientWidth;
+            const fs = fontPx();
+            const text = el.textContent ?? "";
+            if (!content.fixedLayout && text.trim()) {
+              let off = caretOffsetAt(el, center.x, center.y);
+              if (off === null) {
+                const o = origin();
+                // Fuera del texto: el carácter visible más cercano al centro de la página.
+                const vb = visibleBox();
+                off = caretOffsetAt(el, vb.x + vb.w / 2 + o.left, center.y) ?? 0;
+              }
+              off = nearestVisibleChar(text, off);
+              const r = rectOfOffset(off);
+              if (r) {
+                const o = origin();
+                const ax = r.left - o.left;
+                const ay = r.top - o.top;
+                return {
+                  chapter: s.chapter,
+                  anchor: { kind: "text", offset: off },
+                  points: points.map((v, i) => Math.round(((v - (i % 2 ? ay : ax)) / fs) * 1000) / 1000),
+                  width: widthPx / fs,
+                };
+              }
+            }
+            return {
+              chapter: s.chapter,
+              anchor: { kind: "page" },
+              points: points.map((v) => Math.round((v / W) * 10000) / 10000),
+              width: widthPx / W,
+            };
+          },
+          pageKey: (pt) => {
+            const s = st.current;
+            return s.paged ? `${s.chapter}:${Math.floor(pt.x / Math.max(1, s.W))}` : `${s.chapter}:${Math.floor(pt.y / Math.max(1, s.H))}`;
+          },
+          hitStroke: (pt, radius) => {
+            for (const [id, k] of inkCache.current) {
+              if (!intersects(k.box, { x: pt.x - radius, y: pt.y - radius, w: radius * 2, h: radius * 2 })) continue;
+              if (strokeHit(k.pts, pt.x, pt.y, radius + k.width / 2)) return { drawingId: k.drawingId, strokeId: id };
+            }
+            return null;
+          },
+          drawingsInView: () => [...new Set(strokesIn(visibleBox()).map((k) => k.drawingId))],
+          drawingBox: (id) => {
+            let box: Box | null = null;
+            for (const k of inkCache.current.values()) if (k.drawingId === id) box = unionBox(box, k.box);
+            return box;
+          },
+          pageBox: (pt) => {
+            const s = st.current;
+            const m = margin();
+            if (s.paged) {
+              const page = Math.floor(pt.x / Math.max(1, s.W));
+              return { x: page * s.W + m, y: 0, w: s.W - 2 * m, h: s.H };
+            }
+            const vb = visibleBox();
+            return { x: m, y: vb.y, w: cols.clientWidth - 2 * m, h: vb.h };
+          },
+          visibleBox,
+          capture: async (region, textRegion) => {
+            const { canvas, text } = rasterizeFlow({
+              root: el,
+              origin: origin(),
+              region,
+              textRegion,
+              background: p.current.paper.bg,
+              dark: p.current.paper.dark,
+              scale: captureScale(),
+              ink: strokesIn(region).map(toPaint),
+            });
+            const blob = await canvasToBlob(canvas);
+            return { blob, text, width: Math.round(region.w), height: Math.round(region.h) };
+          },
+          locate: (region) => {
+            const s = st.current;
+            const o = origin();
+            const off = caretOffsetAt(el, region.x + o.left + Math.min(12, region.w / 2), region.y + o.top + Math.min(14, region.h / 2));
+            const fraction = s.paged ? (s.pages ? s.page / s.pages : 0) : clamp(vp.scrollTop / Math.max(1, vp.scrollHeight - vp.clientHeight), 0, 1);
+            return { chapter: s.chapter, offset: off ?? undefined, fraction };
+          },
+        };
+      },
       showElement: (target) => {
         const s = st.current;
         const vp = viewportRef.current;
@@ -581,7 +784,7 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || p.current.locked) return;
     const rect = viewRef.current!.getBoundingClientRect();
     const set = p.current.settings;
     // Pantallas curvas: los toques muy pegados al borde se ignoran.
@@ -723,10 +926,12 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
         if (!text.trim()) return p.current.onSelection(null);
         const start = offsetOf(el, r.startContainer, r.startOffset);
         const box = r.getBoundingClientRect();
+        const total = (el.textContent ?? "").length || 1;
         p.current.onSelection({
           chapter: st.current.chapter,
           start,
           end: start + text.length,
+          fraction: Math.min(1, start / total),
           text: text.trim(),
           rect: { top: box.top, bottom: box.bottom, left: box.left, right: box.right },
         });
@@ -778,6 +983,10 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
               if ((e.target as Element).closest("a")) e.preventDefault();
             }}
           />
+          <svg className="ink-layer" aria-hidden="true">
+            <g ref={inkSavedRef} />
+            <g ref={inkLiveRef} />
+          </svg>
         </div>
       </div>
       {!loaded && (

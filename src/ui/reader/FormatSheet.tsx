@@ -39,6 +39,8 @@ export const TOOL_LABEL: Record<ToolId, string> = {
   orientation: "Orientación",
   info: "Información del libro",
   edit: "Vista de edición",
+  draw: "Dibujar a mano",
+  crop: "Recortar",
 };
 
 function Toggle({ title, sub, on, onChange }: { title: string; sub?: string; on: boolean; onChange: (v: boolean) => void }) {

@@ -1,7 +1,9 @@
 // Store principal (zustand). Se guarda en IndexedDB automáticamente.
 import { create } from "zustand";
 import type { BookMeta, ReadingLocation } from "../books/types";
-import { deleteCover, deleteFile, getKV, setKV } from "../lib/db";
+import { deleteCover, deleteFile, deleteMedia, getKV, setKV } from "../lib/db";
+import { findWishFor, isActiveItem, moveActive } from "../notes/readingList";
+import { resolveNotebook, type EntryKind } from "../notes/notebook";
 import { dayKey, debounce, uid } from "../lib/util";
 import {
   ACHIEVEMENTS,
@@ -17,11 +19,16 @@ import {
   migrateState,
   type AppSettings,
   type Bookmark,
+  type Clip,
   type Collection,
   type DayStats,
+  type Drawing,
   type GameId,
   type Highlight,
+  type LooseNote,
+  type Notebook,
   type PersistedState,
+  type ReadingListItem,
   type ReaderSettings,
   type WpmSample,
 } from "./state";
@@ -33,7 +40,8 @@ interface Actions {
   replaceState: (s: PersistedState) => void;
   addBook: (meta: BookMeta) => void;
   updateBook: (id: string, patch: Partial<BookMeta>) => void;
-  removeBook: (id: string) => Promise<void>;
+  /** Borra un libro. Con `keepNotes`, su cuaderno se conserva. */
+  removeBook: (id: string, keepNotes?: boolean) => Promise<void>;
   setLocation: (id: string, loc: Omit<ReadingLocation, "updatedAt">) => void;
   setFinished: (id: string, finished: boolean) => void;
   toggleFavorite: (id: string) => void;
@@ -42,10 +50,28 @@ interface Actions {
   deleteCollection: (id: string) => void;
   toggleBookCollection: (bookId: string, collectionId: string) => void;
   addBookmark: (b: Omit<Bookmark, "id" | "createdAt">) => void;
+  updateBookmark: (id: string, patch: Partial<Bookmark>) => void;
   removeBookmark: (id: string) => void;
   addHighlight: (h: Omit<Highlight, "id" | "createdAt">) => Highlight;
   updateHighlight: (id: string, patch: Partial<Highlight>) => void;
   removeHighlight: (id: string) => void;
+  addDrawing: (d: Omit<Drawing, "id" | "createdAt" | "updatedAt">) => Drawing;
+  updateDrawing: (id: string, patch: Partial<Drawing>) => void;
+  addClip: (c: Omit<Clip, "id" | "createdAt">) => Clip;
+  updateClip: (id: string, patch: Partial<Clip>) => void;
+  addLooseNote: (n: Omit<LooseNote, "id" | "createdAt" | "updatedAt">) => LooseNote;
+  updateLooseNote: (id: string, patch: Partial<LooseNote>) => void;
+  /** Manda una entrada del cuaderno a "Descartados" (se puede recuperar). */
+  discardEntry: (kind: EntryKind, id: string) => void;
+  restoreEntry: (kind: EntryKind, id: string) => void;
+  /** Borra una entrada para siempre (y su imagen, si tiene). */
+  purgeEntry: (kind: EntryKind, id: string) => void;
+  emptyDiscarded: (bookId: string) => void;
+  setNotebook: (bookId: string, patch: Partial<Notebook>) => void;
+  addToReadingList: (item: { bookId?: string; title: string; author?: string; note?: string }) => string | null;
+  updateReadingItem: (id: string, patch: Partial<ReadingListItem>) => void;
+  moveReadingItem: (id: string, to: number) => void;
+  removeReadingItem: (id: string) => void;
   setReader: (patch: Partial<ReaderSettings>) => void;
   setApp: (patch: Partial<AppSettings>) => void;
   logReading: (bookId: string, ms: number, pages: number, percent?: number) => void;
@@ -70,6 +96,11 @@ function persistedOf(s: Store): PersistedState {
     collections: s.collections,
     bookmarks: s.bookmarks,
     highlights: s.highlights,
+    drawings: s.drawings,
+    clips: s.clips,
+    looseNotes: s.looseNotes,
+    notebooks: s.notebooks,
+    readingList: s.readingList,
     reader: s.reader,
     app: s.app,
     progress: s.progress,
@@ -97,6 +128,16 @@ export const useStore = create<Store>((set, get) => {
     }
   };
 
+  type Entry = { id: string; bookId: string; discardedAt?: number; mediaId?: string };
+  const KEY = { highlight: "highlights", bookmark: "bookmarks", drawing: "drawings", clip: "clips", note: "looseNotes" } as const;
+  const entries = (kind: EntryKind) => get()[KEY[kind]] as Entry[];
+  const setEntries = (kind: EntryKind, list: Entry[]) => set({ [KEY[kind]]: list } as unknown as Partial<Store>);
+  const patchEntry = (kind: EntryKind, id: string, patch: Partial<Entry>) =>
+    setEntries(kind, entries(kind).map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const dropMedia = (list: Entry[]) => {
+    for (const x of list) if (x.mediaId) void deleteMedia(x.mediaId).catch(() => undefined);
+  };
+
   return {
     ...defaultState(),
     hydrated: false,
@@ -114,6 +155,12 @@ export const useStore = create<Store>((set, get) => {
 
     addBook: (meta) => {
       set({ books: { ...get().books, [meta.id]: meta } });
+      // ¿Estaba en la lista por leer como deseo? Se vincula.
+      const wish = findWishFor(get().readingList, meta.title);
+      if (wish) {
+        get().updateReadingItem(wish.id, { bookId: meta.id });
+        useUi.getState().toast({ text: `“${meta.title}” estaba en tu lista por leer`, icon: "🗒️" }, 3500);
+      }
       get().checkAchievements();
     },
 
@@ -122,14 +169,35 @@ export const useStore = create<Store>((set, get) => {
       if (b) set({ books: { ...get().books, [id]: { ...b, ...patch } } });
     },
 
-    removeBook: async (id) => {
-      const { [id]: _removed, ...rest } = get().books;
+    removeBook: async (id, keepNotes = false) => {
+      const s = get();
+      const book = s.books[id];
+      const { [id]: _removed, ...rest } = s.books;
       void _removed;
-      set({
-        books: rest,
-        bookmarks: get().bookmarks.filter((b) => b.bookId !== id),
-        highlights: get().highlights.filter((h) => h.bookId !== id),
-      });
+      // En la lista por leer queda como deseo (sin archivo).
+      const readingList = s.readingList.map((i) => (i.bookId === id ? { ...i, bookId: undefined } : i));
+      if (keepNotes && book) {
+        const nb = resolveNotebook(s.notebooks[id], id, book);
+        set({
+          books: rest,
+          readingList,
+          notebooks: { ...s.notebooks, [id]: { ...nb, bookTitle: book.title, bookAuthor: book.author } },
+        });
+      } else {
+        dropMedia([...s.drawings, ...s.clips].filter((x) => x.bookId === id));
+        const { [id]: _nb, ...notebooks } = s.notebooks;
+        void _nb;
+        set({
+          books: rest,
+          readingList,
+          notebooks,
+          bookmarks: s.bookmarks.filter((b) => b.bookId !== id),
+          highlights: s.highlights.filter((h) => h.bookId !== id),
+          drawings: s.drawings.filter((d) => d.bookId !== id),
+          clips: s.clips.filter((c) => c.bookId !== id),
+          looseNotes: s.looseNotes.filter((n) => n.bookId !== id),
+        });
+      }
       await Promise.all([deleteFile(id), deleteCover(id)]);
     },
 
@@ -151,6 +219,11 @@ export const useStore = create<Store>((set, get) => {
       if (finished && !wasFinished) {
         const p = get().progress;
         set({ progress: { ...p, booksFinished: p.booksFinished + 1 } });
+        const listed = get().readingList.find((i) => i.bookId === id && isActiveItem(i));
+        if (listed) {
+          get().updateReadingItem(listed.id, { doneAt: Date.now() });
+          useUi.getState().toast({ text: "Tachado de tu lista por leer", icon: "✅", tone: "success" }, 3500);
+        }
         get().addXp(100, "¡Libro terminado!");
         useUi.getState().celebrate({ kind: "achievement", title: "¡Libro terminado!", subtitle: b.title, icon: "🏁" });
         get().checkAchievements();
@@ -197,6 +270,8 @@ export const useStore = create<Store>((set, get) => {
       get().checkAchievements();
     },
 
+    updateBookmark: (id, patch) => set({ bookmarks: get().bookmarks.map((b) => (b.id === id ? { ...b, ...patch } : b)) }),
+
     removeBookmark: (id) => set({ bookmarks: get().bookmarks.filter((b) => b.id !== id) }),
 
     addHighlight: (h) => {
@@ -210,6 +285,104 @@ export const useStore = create<Store>((set, get) => {
       set({ highlights: get().highlights.map((h) => (h.id === id ? { ...h, ...patch } : h)) }),
 
     removeHighlight: (id) => set({ highlights: get().highlights.filter((h) => h.id !== id) }),
+
+    addDrawing: (d) => {
+      const now = Date.now();
+      const full: Drawing = { ...d, id: uid("ink"), createdAt: now, updatedAt: now };
+      set({ drawings: [...get().drawings, full] });
+      get().checkAchievements();
+      return full;
+    },
+
+    updateDrawing: (id, patch) =>
+      set({ drawings: get().drawings.map((d) => (d.id === id ? { ...d, ...patch, updatedAt: Date.now() } : d)) }),
+
+    addClip: (c) => {
+      const full: Clip = { ...c, id: uid("clip"), createdAt: Date.now() };
+      set({ clips: [...get().clips, full] });
+      get().checkAchievements();
+      return full;
+    },
+
+    updateClip: (id, patch) => set({ clips: get().clips.map((c) => (c.id === id ? { ...c, ...patch } : c)) }),
+
+    addLooseNote: (n) => {
+      const now = Date.now();
+      const full: LooseNote = { ...n, id: uid("note"), createdAt: now, updatedAt: now };
+      set({ looseNotes: [...get().looseNotes, full] });
+      return full;
+    },
+
+    updateLooseNote: (id, patch) =>
+      set({ looseNotes: get().looseNotes.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n)) }),
+
+    discardEntry: (kind, id) => patchEntry(kind, id, { discardedAt: Date.now() }),
+
+    restoreEntry: (kind, id) => patchEntry(kind, id, { discardedAt: undefined }),
+
+    purgeEntry: (kind, id) => {
+      const list = entries(kind);
+      dropMedia(list.filter((x) => x.id === id));
+      setEntries(kind, list.filter((x) => x.id !== id));
+    },
+
+    emptyDiscarded: (bookId) => {
+      for (const kind of Object.keys(KEY) as EntryKind[]) {
+        const list = entries(kind);
+        const gone = list.filter((x) => x.bookId === bookId && x.discardedAt);
+        if (!gone.length) continue;
+        dropMedia(gone);
+        setEntries(kind, list.filter((x) => !gone.includes(x)));
+      }
+    },
+
+    setNotebook: (bookId, patch) => {
+      const s = get();
+      const book = s.books[bookId];
+      const nb = resolveNotebook(s.notebooks[bookId], bookId, book);
+      set({
+        notebooks: {
+          ...s.notebooks,
+          [bookId]: { ...nb, ...(book ? { bookTitle: book.title, bookAuthor: book.author } : {}), ...patch, updatedAt: Date.now() },
+        },
+      });
+      get().checkAchievements();
+    },
+
+    addToReadingList: ({ bookId, title, author = "", note = "" }) => {
+      const list = get().readingList;
+      if (bookId) {
+        const existing = list.find((i) => i.bookId === bookId);
+        if (existing && isActiveItem(existing)) return null;
+        // Si estaba leído o descartado, vuelve a la lista.
+        if (existing) {
+          set({ readingList: [...list.filter((i) => i !== existing), { ...existing, doneAt: undefined, discardedAt: undefined, addedAt: Date.now() }] });
+          return existing.id;
+        }
+      }
+      const item: ReadingListItem = { id: uid("rl"), bookId, title: title.trim(), author: author.trim(), note: note.trim(), addedAt: Date.now() };
+      // Los nuevos van al final de los pendientes (antes de leídos y descartados).
+      const active = list.filter(isActiveItem);
+      set({ readingList: [...active, item, ...list.filter((i) => !isActiveItem(i))] });
+      get().checkAchievements();
+      return item.id;
+    },
+
+    updateReadingItem: (id, patch) => {
+      const list = get().readingList;
+      const before = list.find((i) => i.id === id);
+      if (!before) return;
+      const after = { ...before, ...patch };
+      let next = list.map((i) => (i.id === id ? after : i));
+      // Al salir o volver a los pendientes se reacomoda: pendientes primero.
+      if (isActiveItem(before) !== isActiveItem(after)) next = [...next.filter(isActiveItem), ...next.filter((i) => !isActiveItem(i))];
+      set({ readingList: next });
+      get().checkAchievements();
+    },
+
+    moveReadingItem: (id, to) => set({ readingList: moveActive(get().readingList, id, to) }),
+
+    removeReadingItem: (id) => set({ readingList: get().readingList.filter((i) => i.id !== id) }),
 
     setReader: (patch) => set({ reader: { ...get().reader, ...patch } }),
 
@@ -342,6 +515,11 @@ useStore.subscribe((s, prev) => {
     s.collections !== prev.collections ||
     s.bookmarks !== prev.bookmarks ||
     s.highlights !== prev.highlights ||
+    s.drawings !== prev.drawings ||
+    s.clips !== prev.clips ||
+    s.looseNotes !== prev.looseNotes ||
+    s.notebooks !== prev.notebooks ||
+    s.readingList !== prev.readingList ||
     s.reader !== prev.reader ||
     s.app !== prev.app ||
     s.progress !== prev.progress

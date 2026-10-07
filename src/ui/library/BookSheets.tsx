@@ -5,6 +5,8 @@ import {
   Download,
   Heart,
   ImagePlus,
+  ListOrdered,
+  NotebookText,
   Pencil,
   LibraryBig,
   Trash,
@@ -21,7 +23,8 @@ import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
 import { deliverFile } from "../../backup/backup";
 import { Cover, invalidateCover } from "../components/Cover";
-import { confirmDialog, promptDialog } from "../components/Dialog";
+import { choiceDialog, promptDialog } from "../components/Dialog";
+import { isActiveItem } from "../../notes/readingList";
 import { Sheet } from "../components/Sheet";
 import { pickFiles } from "./importFlow";
 import { openBook } from "./useOpenBook";
@@ -29,7 +32,16 @@ import { openBook } from "./useOpenBook";
 export function BookActionsSheet({ bookId, onClose }: { bookId: string | null; onClose: () => void }) {
   const book = useStore((s) => (bookId ? s.books[bookId] : undefined));
   const collections = useStore((s) => s.collections);
-  const highlights = useStore((s) => s.highlights.filter((h) => h.bookId === bookId).length);
+  const highlights = useStore((s) => s.highlights.filter((h) => h.bookId === bookId && !h.discardedAt).length);
+  const noteCount = useStore(
+    (s) =>
+      s.highlights.filter((h) => h.bookId === bookId && !h.discardedAt).length +
+      s.drawings.filter((d) => d.bookId === bookId && !d.discardedAt).length +
+      s.clips.filter((c) => c.bookId === bookId && !c.discardedAt).length +
+      s.looseNotes.filter((n) => n.bookId === bookId && !n.discardedAt).length +
+      s.bookmarks.filter((b) => b.bookId === bookId && !b.discardedAt).length
+  );
+  const listPos = useStore((s) => s.readingList.filter(isActiveItem).findIndex((i) => i.bookId === bookId));
   const store = useStore.getState();
   const [view, setView] = useState<"main" | "edit" | "shelves">("main");
   const [title, setTitle] = useState("");
@@ -53,17 +65,23 @@ export function BookActionsSheet({ bookId, onClose }: { bookId: string | null; o
 
   const remove = async () => {
     onClose();
-    const ok = await confirmDialog(
+    const choice = await choiceDialog(
       "¿Eliminar este libro?",
-      `Se borrará “${book.title}” de este dispositivo junto con sus marcadores y subrayados.`,
-      "Eliminar",
-      true
+      noteCount
+        ? `Se borrará “${book.title}” de este dispositivo. Su cuaderno tiene ${noteCount} ${noteCount === 1 ? "nota" : "notas"}: ¿lo conservas?`
+        : `Se borrará “${book.title}” de este dispositivo.`,
+      noteCount
+        ? [
+            { label: "Borrar todo", value: "all", tone: "danger" },
+            { label: "Conservar cuaderno", value: "keep", tone: "primary" },
+          ]
+        : [{ label: "Eliminar", value: "all", tone: "danger" }]
     );
-    if (!ok) return;
+    if (!choice) return;
     forgetBookContent(book.id);
     invalidateCover(book.id);
-    await store.removeBook(book.id);
-    toast("Libro eliminado");
+    await store.removeBook(book.id, choice === "keep");
+    toast(choice === "keep" ? "Libro eliminado; su cuaderno sigue en Cuadernos" : "Libro eliminado");
   };
 
   const exportFile = async () => {
@@ -144,6 +162,40 @@ export function BookActionsSheet({ bookId, onClose }: { bookId: string | null; o
                     ? collections.filter((c) => book.collections.includes(c.id)).map((c) => `${c.emoji} ${c.name}`).join(", ")
                     : "Sin estantería"}
                 </div>
+              </span>
+            </button>
+            <button
+              className="list-item"
+              onClick={() => {
+                if (listPos >= 0) {
+                  onClose();
+                  navigate({ name: "readingList" });
+                } else if (store.addToReadingList({ bookId: book.id, title: book.title, author: book.author })) {
+                  toast("Añadido a tu lista por leer", { icon: "🗒️", tone: "success" });
+                }
+              }}
+            >
+              <span className="li-icon" style={{ color: "var(--teal)", background: "rgba(69,208,193,.14)" }}>
+                <ListOrdered size={18} />
+              </span>
+              <span className="li-main">
+                <div className="li-title">{listPos >= 0 ? `En tu lista por leer · #${listPos + 1}` : "Añadir a la lista por leer"}</div>
+                {listPos >= 0 && <div className="li-sub">Toca para ver y ordenar la lista</div>}
+              </span>
+            </button>
+            <button
+              className="list-item"
+              onClick={() => {
+                onClose();
+                navigate({ name: "notebook", bookId: book.id });
+              }}
+            >
+              <span className="li-icon" style={{ color: "var(--orange)", background: "rgba(255,159,67,.14)" }}>
+                <NotebookText size={18} />
+              </span>
+              <span className="li-main">
+                <div className="li-title">Cuaderno de notas</div>
+                <div className="li-sub">{noteCount ? `${noteCount} ${noteCount === 1 ? "entrada" : "entradas"}` : "Aún en blanco"}</div>
               </span>
             </button>
             <button className="list-item" onClick={() => store.setFinished(book.id, book.status !== "finished")}>
