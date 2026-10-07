@@ -1,10 +1,12 @@
-import { BookA, Copy, Image, NotebookPen, Share2, Trash2 } from "lucide-react";
+import { BookA, Copy, Image, NotebookPen, Send, Share2, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { capitalize } from "../../lib/util";
 import { HIGHLIGHT_COLOR_IDS, HIGHLIGHT_COLORS, MARK_STYLES, markStyleInfo } from "../../notes/marks";
 import type { Highlight, HighlightColor, MarkStyle } from "../../store/state";
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
+import { choiceDialog, promptDialog } from "../components/Dialog";
+import { openShare } from "../community/ShareSheet";
 import { Sheet } from "../components/Sheet";
 import type { SelectionInfo } from "./ReflowView";
 
@@ -17,10 +19,28 @@ export async function copyText(text: string) {
   }
 }
 
-function define(text: string) {
+/** Busca primero en el diccionario propio; si no está, ofrece agregarla o buscarla en línea. */
+export async function define(text: string) {
   const word = text.trim().split(/\s+/)[0].replace(/[^\p{L}-]/gu, "").toLowerCase();
   if (!word) return;
-  window.open(`https://dle.rae.es/${encodeURIComponent(word)}`, "_blank", "noopener");
+  const store = useStore.getState();
+  const dict = store.app.dictionary;
+  const entry = dict.find((d) => d.word === word);
+  const online = () => window.open(`https://dle.rae.es/${encodeURIComponent(word)}`, "_blank", "noopener");
+  const edit = async () => {
+    const def = await promptDialog(`Definición de “${word}”`, entry?.definition ?? "", "Escribe tu definición");
+    if (def === null) return;
+    const rest = dict.filter((d) => d.word !== word);
+    store.setApp({ dictionary: def.trim() ? [...rest, { word, definition: def.trim(), createdAt: Date.now() }] : rest });
+    toast(def.trim() ? "Guardado en tu diccionario" : "Quitado del diccionario", { tone: "success" });
+  };
+  const buttons = [
+    ...(store.app.onlineDictionary ? [{ label: "Buscar en línea", value: "online" }] : []),
+    { label: entry ? "Editar" : "Agregar a mi diccionario", value: "edit", tone: "primary" as const },
+  ];
+  const choice = await choiceDialog(word, entry ? entry.definition : "No está en tu diccionario personal.", buttons);
+  if (choice === "online") online();
+  else if (choice === "edit") await edit();
 }
 
 export async function shareQuote(text: string, title: string) {
@@ -132,7 +152,7 @@ export function SelectionMenu({
           <Copy size={19} />
         </button>
         {sel.text.split(/\s+/).length <= 3 && (
-          <button className="sel-btn" onClick={() => define(sel.text)} aria-label="Definir" title="Definir">
+          <button className="sel-btn" onClick={() => void define(sel.text)} aria-label="Definir" title="Definir">
             <BookA size={19} />
           </button>
         )}
@@ -220,6 +240,16 @@ export function HighlightSheet({
                 <Image size={16} /> Tarjeta
               </button>
             )}
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                if (note !== h.note) update(h.id, { note: note.trim() });
+                onClose();
+                openShare({ kind: "quote", highlightId: h.id });
+              }}
+            >
+              <Send size={16} /> A mis amigos
+            </button>
             <span className="spacer" />
             <button
               className="btn btn-sm btn-danger"

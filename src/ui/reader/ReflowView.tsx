@@ -7,6 +7,7 @@ import { clamp } from "../../lib/util";
 import { bbox, intersects, padBox, strokeHit, transformPoints, unionBox, type Box } from "../../notes/ink";
 import { canvasToBlob, rasterizeFlow } from "../../notes/raster";
 import type { Drawing, Highlight, ReaderSettings } from "../../store/state";
+import { applyFocusMarks, footnoteOf, isNoteLink } from "./focus";
 import { offsetOf, pointAt, rangeFromOffsets, readingBlocks, textNodes, unwrapMarks, wrapOffsets } from "./dom";
 import {
   captureScale,
@@ -26,6 +27,17 @@ export interface ViewLocation {
   displayFraction: number;
   page: number;
   pages: number;
+  /** Número de página de la edición impresa (si el libro lo indica). */
+  printedPage?: string;
+  /** Se muestran dos páginas a la vez. */
+  dual?: boolean;
+}
+
+export interface FootnoteInfo {
+  html: string;
+  /** Destino para "ir a la nota". */
+  chapter: number;
+  anchor?: string;
 }
 
 export type GoTarget =
@@ -82,7 +94,12 @@ interface Props {
   onHighlightTap: (id: string) => void;
   onSelection: (s: SelectionInfo | null) => void;
   onBrightness: (v: number) => void;
+  onFontSize: (v: number) => void;
   onExternalLink: (href: string) => void;
+  onFootnote: (f: FootnoteInfo) => void;
+  /** Modo selección: arrastrar el dedo selecciona texto en vez de pasar página. */
+  selectMode: boolean;
+  autoScroll: boolean;
 }
 
 type Target =
@@ -103,7 +120,7 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
   const p = useRef(props);
   p.current = props;
 
-  const paged = settings.mode === "paged" || !!content.fixedLayout;
+  const paged = settings.mode === "paged" || !settings.allowScroll || !!content.fixedLayout;
   const viewRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const colsRef = useRef<HTMLDivElement>(null);
@@ -120,6 +137,8 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     H: 0,
     paged,
     rendered: -1,
+    dual: false,
+    pbs: [] as { pos: number; label: string }[],
     target: toTarget(props.initial) as Target | null,
   });
 
@@ -161,6 +180,14 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     const s = st.current;
     const vp = viewportRef.current;
     if (!vp || s.rendered < 0) return;
+    const printed = (pos: number) => {
+      let label: string | undefined;
+      for (const pb of s.pbs) {
+        if (pb.pos <= pos) label = pb.label;
+        else break;
+      }
+      return label;
+    };
     if (s.paged) {
       p.current.onLocation({
         chapter: s.chapter,
@@ -168,6 +195,8 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
         displayFraction: s.pages ? (s.page + 1) / s.pages : 1,
         page: s.page,
         pages: s.pages,
+        printedPage: printed(s.page),
+        dual: s.dual,
       });
     } else {
       const max = Math.max(1, vp.scrollHeight - vp.clientHeight);
@@ -179,6 +208,7 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
         displayFraction: vp.scrollHeight <= vp.clientHeight ? 1 : clamp((vp.scrollTop + vp.clientHeight) / vp.scrollHeight, 0, 1),
         page: Math.min(pages - 1, Math.floor(vp.scrollTop / Math.max(1, vp.clientHeight))),
         pages,
+        printedPage: printed(vp.scrollTop + vp.clientHeight / 2),
       });
     }
   }, []);
@@ -299,26 +329,37 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     const target = s.target ?? { kind: "fraction", value: current };
     s.target = null;
 
-    const isPaged = p.current.settings.mode === "paged" || !!content.fixedLayout;
+    const set = p.current.settings;
+    const isPaged = set.mode === "paged" || !set.allowScroll || !!content.fixedLayout;
     s.paged = isPaged;
     const W = vp.clientWidth;
     const H = vp.clientHeight;
     s.W = W;
     s.H = H;
-    const m = content.fixedLayout ? 0 : Math.min(p.current.settings.margin, W / 4);
+    const m = content.fixedLayout ? 0 : Math.min(set.margin, W / 4);
+    const dual =
+      isPaged &&
+      !content.fixedLayout &&
+      (set.dualPage === "on" ? W >= 480 : set.dualPage === "auto" ? W >= 900 || (W > H * 1.15 && W >= 640) : false);
+    s.dual = dual;
     view.style.setProperty("--page-h", `${H}px`);
 
     if (isPaged) {
       vp.scrollTop = 0;
       cols.style.width = `${W}px`;
       cols.style.height = `${H}px`;
-      cols.style.columnWidth = `${W - 2 * m}px`;
+      // Doble página: dos columnas por pantalla (el paso sigue siendo W).
+      cols.style.columnWidth = dual ? `${(W - 4 * m) / 2}px` : `${W - 2 * m}px`;
       cols.style.columnGap = `${2 * m}px`;
       cols.style.padding = `0 ${m}px`;
       const end = el.querySelector(".rd-end");
       const base = cols.getBoundingClientRect().left;
       const endX = end ? end.getBoundingClientRect().left - base : 0;
       s.pages = Math.max(1, Math.floor((endX - 1) / W) + 1);
+      s.pbs = Array.from(el.querySelectorAll<HTMLElement>("[data-pb]")).map((pb) => {
+        const r = pb.getClientRects()[0] ?? pb.getBoundingClientRect();
+        return { pos: Math.floor((r.left - base + 1) / W), label: pb.dataset.pb ?? "" };
+      });
       let page = 0;
       if (target.kind === "fraction") page = Math.round(target.value * s.pages);
       else if (target.kind === "end") page = s.pages - 1;
@@ -353,6 +394,11 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
         if (r) top = r.top - vp.getBoundingClientRect().top + vp.scrollTop - H * 0.25;
       }
       vp.scrollTop = clamp(top, 0, max);
+      const vtop = vp.getBoundingClientRect().top - vp.scrollTop;
+      s.pbs = Array.from(el.querySelectorAll<HTMLElement>("[data-pb]")).map((pb) => ({
+        pos: pb.getBoundingClientRect().top - vtop,
+        label: pb.dataset.pb ?? "",
+      }));
       report();
     }
     if (target.kind === "offset" && target.flash) flash(target.value, target.flash);
@@ -387,6 +433,9 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
       // La nota se señala con un punto al final del fragmento.
       if (h.note && marks.length) marks[marks.length - 1].dataset.note = "1";
     }
+    const set = p.current.settings;
+    applyFocusMarks(el, { bionic: set.bionic, ratio: set.bionicRatio, sentenceStart: set.sentenceStart });
+    if (set.footnotes === "inline") void inlineFootnotes(el, loaded.chapter);
     s.rendered = loaded.chapter;
     layout();
     // Las imágenes cambian el tamaño al cargar: volver a paginar.
@@ -400,7 +449,26 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
       img.addEventListener("error", done, { once: true });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, hlKey]);
+  }, [loaded, hlKey, settings.bionic, settings.bionicRatio, settings.sentenceStart, settings.footnotes]);
+
+  /** Notas en línea: el texto de la nota se muestra junto a la llamada (sin tocar el texto del capítulo). */
+  async function inlineFootnotes(el: HTMLElement, chapter: number) {
+    const links = Array.from(el.querySelectorAll<HTMLAnchorElement>("a[href]")).filter(isNoteLink);
+    let changed = false;
+    for (const a of links) {
+      const dest = content.resolveHref?.(a.getAttribute("href") ?? "", chapter);
+      if (!dest?.anchor) continue;
+      let html: string | null = null;
+      if (dest.chapter === chapter) html = footnoteOf(el, dest.anchor);
+      else html = footnoteOf(new DOMParser().parseFromString(`<body>${await content.getHtml(dest.chapter)}</body>`, "text/html").body, dest.anchor);
+      if (!html || contentRef.current !== el) continue;
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html;
+      a.dataset.fnText = (tmp.textContent ?? "").replace(/\s+/g, " ").trim().replace(/^\[?\d+\]?[.)]?\s*/, "").slice(0, 600);
+      changed = true;
+    }
+    if (changed) layoutRef.current();
+  }
 
   // Trazos nuevos, borrados o descartados → volver a dibujarlos.
   const inkKey = props.drawings
@@ -416,7 +484,36 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
   useLayoutEffect(() => {
     layout();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s0.mode, s0.font, s0.fontSize, s0.lineHeight, s0.margin, s0.align, s0.paragraphSpacing, s0.indent, s0.hyphenate, s0.showStatus]);
+  }, [s0.mode, s0.allowScroll, s0.dualPage, s0.font, s0.fontSize, s0.lineHeight, s0.margin, s0.align, s0.paragraphSpacing, s0.indent, s0.hyphenate, s0.showStatus, s0.miniStatus, s0.trimTop, s0.publisherFonts, s0.timeLeft]);
+
+  // Desplazamiento automático: continuo en modo vertical, por páginas en modo paginado.
+  useEffect(() => {
+    if (!props.autoScroll) return;
+    const speed = Math.max(1, settings.autoScrollSpeed);
+    if (st.current.paged) {
+      const t = setInterval(() => nextRef.current(), Math.max(2500, (1800 / speed) * 1000));
+      return () => clearInterval(t);
+    }
+    let raf = 0;
+    let last = performance.now();
+    let acc = 0;
+    const step = (now: number) => {
+      const vp = viewportRef.current;
+      if (vp) {
+        acc += ((now - last) / 1000) * speed;
+        last = now;
+        if (acc >= 1) {
+          const px = Math.floor(acc);
+          acc -= px;
+          if (vp.scrollTop >= vp.scrollHeight - vp.clientHeight - 2) nextChapterRef.current();
+          else vp.scrollTop += px;
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [props.autoScroll, settings.autoScrollSpeed, settings.mode]);
 
   useEffect(() => {
     const vp = viewportRef.current;
@@ -482,6 +579,11 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
       } else vp.scrollBy({ top: -vp.clientHeight * 0.9, behavior: p.current.settings.animation === "slide" ? "smooth" : "auto" });
     }
   }, [requestChapter, setPage]);
+
+  const nextRef = useRef(next);
+  nextRef.current = next;
+  const nextChapterRef = useRef(nextChapter);
+  nextChapterRef.current = nextChapter;
 
   const isVisibleRect = (r: DOMRect) => {
     const s = st.current;
@@ -667,9 +769,11 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     x: number;
     y: number;
     t: number;
-    mode: "pending" | "none" | "drag" | "bright";
+    mode: "pending" | "none" | "drag" | "bright" | "font";
     edge: boolean;
+    rightEdge: boolean;
     bright: number;
+    font: number;
     pointerType: string;
     target: EventTarget | null;
   } | null>(null);
@@ -682,13 +786,23 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 || p.current.locked) return;
     const rect = viewRef.current!.getBoundingClientRect();
+    const set = p.current.settings;
+    // Pantallas curvas: los toques muy pegados al borde se ignoran.
+    if (set.edgeGuard > 0 && (e.clientX - rect.left < set.edgeGuard || rect.right - e.clientX < set.edgeGuard)) {
+      gesture.current = null;
+      return;
+    }
+    const edgeW = Math.max(28, rect.width * 0.09);
+    const touch = e.pointerType !== "mouse";
     gesture.current = {
       x: e.clientX,
       y: e.clientY,
       t: performance.now(),
       mode: "pending",
-      edge: e.pointerType !== "mouse" && e.clientX - rect.left < Math.max(28, rect.width * 0.09),
-      bright: p.current.settings.brightness,
+      edge: touch && set.edgeBrightness && e.clientX - rect.left < edgeW,
+      rightEdge: touch && set.edgeFontSize && rect.right - e.clientX < edgeW,
+      bright: set.brightness,
+      font: set.fontSize,
       pointerType: e.pointerType,
       target: e.target,
     };
@@ -702,11 +816,16 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     const s = st.current;
     if (g.mode === "pending") {
       if (g.edge && Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 1.2) g.mode = "bright";
+      else if (g.rightEdge && !content.fixedLayout && Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 1.2) g.mode = "font";
+      else if (p.current.selectMode) g.mode = "none";
       else if (s.paged && g.pointerType !== "mouse" && Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) && !hasSelection()) g.mode = "drag";
       else if (Math.hypot(dx, dy) > 12) g.mode = "none";
     }
     if (g.mode === "bright") {
       p.current.onBrightness(clamp(g.bright - dy / (s.H * 0.7 || 500), 0.15, 1));
+    } else if (g.mode === "font") {
+      const v = clamp(Math.round(g.font - dy / 22), 12, 34);
+      if (v !== p.current.settings.fontSize) p.current.onFontSize(v);
     } else if (g.mode === "drag" && p.current.settings.animation === "slide" && colsRef.current) {
       let off = dx;
       if ((s.page === 0 && s.chapter === 0 && dx > 0) || (s.page === s.pages - 1 && s.chapter === content.chapters.length - 1 && dx < 0)) off = dx / 3;
@@ -722,7 +841,7 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     const dt = performance.now() - g.t;
     const dx = e.clientX - g.x;
     const dy = e.clientY - g.y;
-    if (g.mode === "bright") return;
+    if (g.mode === "bright" || g.mode === "font") return;
     if (g.mode === "drag") {
       const fast = Math.abs(dx) / Math.max(1, dt) > 0.45;
       if (Math.abs(dx) > st.current.W * 0.16 || (fast && Math.abs(dx) > 30)) {
@@ -745,6 +864,10 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
       if (/^(https?:|mailto:)/i.test(href)) p.current.onExternalLink(href);
       else {
         const dest = content.resolveHref?.(href, st.current.chapter);
+        if (dest?.anchor && p.current.settings.footnotes !== "jump" && isNoteLink(link)) {
+          void showFootnote(dest.chapter, dest.anchor);
+          return;
+        }
         if (dest) requestChapter(dest.chapter, dest.anchor ? { kind: "anchor", value: dest.anchor } : { kind: "fraction", value: 0 });
       }
       return;
@@ -759,6 +882,16 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
     if (p.current.settings.tapZones && fx < 0.3) prev();
     else if (p.current.settings.tapZones && fx > 0.7) next();
     else p.current.onCenterTap();
+  };
+
+  const showFootnote = async (chapter: number, anchor: string) => {
+    const root =
+      chapter === st.current.chapter && contentRef.current
+        ? contentRef.current
+        : new DOMParser().parseFromString(`<body>${await content.getHtml(chapter)}</body>`, "text/html").body;
+    const html = footnoteOf(root, anchor);
+    if (html) p.current.onFootnote({ html, chapter, anchor });
+    else requestChapter(chapter, { kind: "anchor", value: anchor });
   };
 
   // Teclado (útil en tabletas con teclado o en la computadora).
@@ -828,7 +961,9 @@ export const ReflowView = forwardRef<ViewHandle, Props>(function ReflowView(prop
   return (
     <div
       ref={viewRef}
-      className={`rd-view ${paged ? "paged" : "scroll"} ${content.fixedLayout ? "fixed" : ""}`}
+      className={`rd-view ${paged ? "paged" : "scroll"} ${content.fixedLayout ? "fixed" : ""} ${settings.footnotes !== "jump" ? "fn-hide" : ""} ${
+        settings.footnotes === "inline" ? "fn-inline" : ""
+      } ${settings.trimTop ? "trim-top" : ""} ${settings.publisherFonts && settings.bookStyles ? "pub-fonts" : ""} ${props.selectMode ? "select-mode" : ""}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

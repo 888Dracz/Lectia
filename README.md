@@ -6,13 +6,13 @@ notas por libro** (remarcados, escritura a mano y recortes), **lista por leer**
 ordenable y respaldo completo. Funciona sin conexión y se instala como una app
 más (PWA).
 
-**Abrir la app:** <https://888dracz.github.io/lectia/>
+**Abrir la app:** <https://888dracz.github.io/Lectia/>
 (se publica sola cada vez que se fusiona a `main`).
 
 ## Qué puede hacer
 
 ### 📖 Lector
-- Formatos: **EPUB, PDF, Word (.docx), TXT, Markdown, HTML, FB2 y cómics CBZ**.
+- Formatos: **EPUB, PDF, Kindle (MOBI/AZW3 sin DRM), Word (.docx), TXT, Markdown, HTML, FB2 y cómics CBZ**.
 - Pasar página tocando los bordes o **deslizando el dedo**; tocar el centro muestra los menús.
 - **Brillo** deslizando el dedo arriba/abajo por el borde izquierdo.
 - 8 temas de lectura: Día, Papel, Sepia, Menta, Atardecer, Noche, AMOLED y Luna.
@@ -21,7 +21,8 @@ más (PWA).
 - Modo **páginas** o **desplazamiento** continuo.
 - **PDF**: páginas originales con zoom (también con pellizco) y filtro nocturno, o
   **modo texto adaptable**.
-- Índice, **marcadores**, **búsqueda**, diccionario (RAE), copiar y compartir citas.
+- Índice, **marcadores**, **búsqueda**, **diccionario personal** (con consulta en la RAE),
+  copiar y compartir citas.
 - **Remarcar texto de 6 formas**: resaltar, subrayar, ondular, **negrita**, recuadrar y
   tachar, en 6 colores, con nota. Se elige con un toque desde el menú de selección
   (recuerda la última forma y color) y se cambia o **descarta** tocando el fragmento.
@@ -34,6 +35,23 @@ más (PWA).
 - **Escuchar** el libro en voz alta (voz del sistema), con velocidad y voz elegibles.
 - Barra de estado con capítulo, página, hora, batería y porcentaje.
 - Mantiene la pantalla encendida y recuerda dónde te quedaste en cada libro.
+- **Pantalla y gestos** (lector › Aspecto › Pantalla): ocultar la barra de notificaciones,
+  borde derecho para el tamaño de letra, pasar página **inclinando el teléfono**, sonido de
+  página, **doble página** en tabletas/horizontal, desactivar el desplazamiento vertical,
+  bordes táctiles inactivos (pantallas curvas) y barra de herramientas configurable (una o
+  dos líneas, iconos a elección: seleccionar, buscar, auto-desplazamiento, voz, capítulo y
+  libro anterior/siguiente, marcador, brillo, letra, orientación, información, edición).
+- Barra de estado o **mini barra**, avance en % o páginas y **tiempo restante** del
+  capítulo y del libro; **número de página de la edición impresa** (EPUB con *page-list*).
+- **Formato**: sangría de primera línea, quitar líneas vacías y espacios dobles, recortar el
+  espacio superior.
+- **Motor**: usar o ignorar los estilos CSS y las fuentes del libro, **notas al pie** en
+  ventana, en el texto o saltando a ellas, y **vista de edición** del HTML del capítulo.
+- **Salud visual** (Aspecto › Enfoque): recordatorio de descanso, alertas a horas fijas,
+  **filtro de luz azul** (intensidad y temperatura), **regla de lectura**, primera palabra
+  de cada oración y **lectura biónica**.
+- **Información del libro**: metadatos, horas leídas, palabras por minuto, palabras y
+  caracteres exactos, tiempo restante e **historial diario** (fecha, tiempo, PPM y avance).
 
 ### 🗂️ Biblioteca
 - Portadas reales (EPUB, PDF, FB2, CBZ) o portadas generadas con estilo.
@@ -75,9 +93,26 @@ más (PWA).
 - **Polvo de hadas** ✨ (experiencia), niveles y rangos, **racha** de días, meta diaria,
   retos del día y **29 logros**.
 
+### 🏆 Comunidad (estilo Duolingo)
+- **Perfil** con avatar, color, @usuario, géneros favoritos, libro y autores
+  favoritos, momento de lectura y meta de libros del año.
+- **Ligas semanales por divisiones**: compites con hasta 30 lectores; los
+  primeros suben y los últimos bajan, de Bronce a Diamante.
+- **Rachas de amigos**: días seguidos en que los dos leyeron, y la racha de
+  cada persona visible en su perfil, la liga y el ranking.
+- **Ranking semanal de amigos**, solicitudes de amistad y enlace para invitar.
+- **Novedades con "me gusta"**: libros terminados y recomendados (con
+  estrellas), citas con tu nota, rachas, logros y ascensos de liga.
+- **Nada de chats ni comentarios**: la única interacción es la amistad y el
+  "me gusta". Lo que compartes solo lo ven tus amigos y los archivos de tus
+  libros nunca salen del teléfono.
+- Funciona con [Supabase](supabase/README.md); sin configurarlo, la app muestra
+  una **demostración** con lectores de ejemplo.
+
 ### 📈 Progreso
-Nivel, meta diaria, racha, retos, gráfico de la semana, calendario de lectura,
-totales y evolución de tu velocidad.
+Nivel, meta diaria, racha con **protectores de racha** 🧊 (se gana uno cada 7
+días), retos, gráfico de la semana, calendario de lectura, totales y evolución
+de tu velocidad.
 
 ### 🛟 Respaldo
 En **Ajustes → Respaldo**:
@@ -87,14 +122,23 @@ En **Ajustes → Respaldo**:
 - **Solo datos**: lo mismo pero sin los archivos de los libros (muy liviano).
 - Se puede **guardar en el teléfono o compartir** (Google Drive, correo…).
 - **Restaurar** en cualquier dispositivo, **combinando** con lo que ya hay o **reemplazándolo**.
+- **Copia de ajustes**: un `.json` solo con la configuración (lector, temas, diccionario).
+- **Sincronización en la nube** (Ajustes → Sincronización): subir, descargar o sincronizar en
+  ambos sentidos el progreso, marcadores y notas con **Dropbox**, **Google Drive**
+  (carpeta privada de la app), **WebDAV** (Nextcloud, ownCloud…) o **FTP** a través de la
+  dirección HTTP/WebDAV del servidor (los navegadores no hablan FTP directamente). Los
+  libros se emparejan entre dispositivos por nombre y tamaño de archivo. Las credenciales
+  nunca se incluyen en los respaldos.
+- Al recibir un libro desde otra app se pide confirmación (“Guardar archivo de libro”).
 
-> Todo se guarda **solo en tu dispositivo** (IndexedDB). Haz respaldos de vez en
-> cuando: si se borran los datos del navegador, la biblioteca solo se recupera
-> desde un respaldo.
+> Tus libros, notas y progreso se guardan **solo en tu dispositivo** (IndexedDB).
+> Haz respaldos de vez en cuando: si se borran los datos del navegador, la
+> biblioteca solo se recupera desde un respaldo. La comunidad guarda en el
+> servidor solo tu perfil, tu actividad diaria, tus amistades y lo que compartes.
 
 ## Instalar en el celular
 
-1. Abre <https://888dracz.github.io/lectia/> en Chrome (Android) o Safari (iPhone).
+1. Abre <https://888dracz.github.io/Lectia/> en Chrome (Android) o Safari (iPhone).
 2. Android: menú ⋮ → **Instalar app** (o “Agregar a la pantalla principal”).
    iPhone: botón Compartir → **Agregar a inicio**.
 3. Ábrela desde su ícono: funciona sin conexión y en Android aparece en el menú
@@ -108,6 +152,7 @@ Requiere Node 22.
 npm install
 npm run dev        # servidor de desarrollo (http://localhost:5173)
 npm test           # pruebas (vitest)
+npm run test:sql   # pruebas de la base de datos de la comunidad (Postgres 16)
 npm run build      # typecheck + build de producción en dist/
 npm run preview    # sirve el build en http://localhost:4173/lectia/
 ```
@@ -118,6 +163,7 @@ npm run preview    # sirve el build en http://localhost:4173/lectia/
 src/
   books/          # Formatos: epub, pdf (pdf.js), docx (mammoth), txt/md, html, fb2, cbz
   backup/         # Respaldo y restauración (.zip con fflate)
+  community/      # Comunidad: API (Supabase o demostración), ligas, rachas, sincronización
   games/          # Lógica de lectura rápida y generadores de minijuegos
   lib/            # IndexedDB, utilidades de texto, navegación y botón "atrás"
   notes/          # Cuadernos, remarcados, trazos (formas), recortes, tarjetas y lista por leer
@@ -128,15 +174,22 @@ src/
     notebook/     # Cuadernos de notas y pestaña Cuadernos
     readinglist/  # Lista por leer (arrastrar para ordenar)
     games/        # Pantalla Entrenar y minijuegos
+    community/    # Liga, amigos, novedades, perfiles y cuenta
     progress/     # Estadísticas y logros
     settings/     # Ajustes y respaldo
   sw.ts           # Service worker: sin conexión + "Compartir → Lectia"
   styles/         # Sistema de diseño (temas claro/oscuro, colores de acento)
+supabase/
+  migrations/     # Base de datos de la comunidad (tablas, funciones y permisos)
+  tests/          # Pruebas SQL
 ```
 
+Para activar la comunidad real sigue [supabase/README.md](supabase/README.md).
+
 Las pruebas cubren los formatos (EPUB, TXT, Markdown, FB2, HTML, PDF), los
-minijuegos, la lectura rápida, los niveles y rachas, el respaldo, los cuadernos,
-el reconocimiento de formas de los trazos y la lista por leer.
+minijuegos, la lectura rápida, los niveles, rachas y protectores, el respaldo, los cuadernos,
+el reconocimiento de formas de los trazos, la lista por leer, las ligas, las rachas de
+amigos y la base de datos de la comunidad.
 
 ### Publicación
 

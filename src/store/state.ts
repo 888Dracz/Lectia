@@ -1,5 +1,9 @@
 // Estado persistente de la app: biblioteca, notas, ajustes y progreso.
 import type { BookMeta } from "../books/types";
+import type { PostData, PostKind } from "../community/types";
+
+/** Máximo de protectores de racha guardados a la vez. */
+export const MAX_FREEZES = 2;
 
 export const STATE_VERSION = 2;
 
@@ -153,7 +157,26 @@ export interface ReadingListItem {
   discardedAt?: number;
 }
 
-export type ReaderThemeId = "day" | "paper" | "sepia" | "mint" | "dusk" | "night" | "amoled" | "moon";
+export type ReaderThemeId = "day" | "paper" | "sepia" | "mint" | "dusk" | "night" | "amoled" | "moon" | "custom";
+
+export interface CustomTheme {
+  bg: string;
+  fg: string;
+  link: string;
+  dark: boolean;
+}
+
+/** Accesos rápidos que se pueden mostrar en la barra de herramientas del lector. */
+export type ToolId =
+  | "toc" | "format" | "night" | "tts" | "rsvp" | "select" | "search" | "autoscroll"
+  | "prevChapter" | "nextChapter" | "prevFile" | "nextFile" | "bookmark" | "brightness"
+  | "fontSize" | "orientation" | "info" | "edit" | "draw" | "crop";
+
+export const ALL_TOOLS: ToolId[] = [
+  "toc", "format", "night", "tts", "rsvp", "select", "search", "autoscroll",
+  "prevChapter", "nextChapter", "prevFile", "nextFile", "bookmark", "brightness",
+  "fontSize", "orientation", "info", "edit", "draw", "crop",
+];
 export type FontId = "literata" | "lora" | "merriweather" | "atkinson" | "inter" | "serif" | "sans";
 
 export interface ReaderSettings {
@@ -178,6 +201,65 @@ export interface ReaderSettings {
   rsvpWpm: number;
   rsvpChunk: number;
   pdfZoom: number;
+
+  // --- Pantalla y navegación ---
+  /** Deslizar el borde izquierdo ajusta el brillo. */
+  edgeBrightness: boolean;
+  /** Deslizar el borde derecho ajusta el tamaño de letra. */
+  edgeFontSize: boolean;
+  /** Pasar página inclinando el dispositivo. */
+  tiltPaging: boolean;
+  /** Grados de inclinación necesarios (más bajo = más sensible). */
+  tiltThreshold: number;
+  pageSound: boolean;
+  pageSoundVolume: number;
+  /** Doble página en pantallas anchas (tabletas o teléfono horizontal). */
+  dualPage: "auto" | "on" | "off";
+  /** Permitir el modo de desplazamiento vertical. */
+  allowScroll: boolean;
+  /** Tiempo de lectura restante en la barra de estado. */
+  timeLeft: "off" | "chapter" | "book" | "both";
+  /** Mini barra de estado (una sola línea fina) en lugar de la completa. */
+  miniStatus: boolean;
+  /** Mostrar el avance como porcentaje, número de página o ambos. */
+  progressDisplay: "percent" | "page" | "both";
+  /** Píxeles de los bordes que ignoran toques (pantallas curvas). 0 = desactivado. */
+  edgeGuard: number;
+  autoScrollSpeed: number;
+
+  // --- Tipografía y formato ---
+  cleanEmptyLines: boolean;
+  cleanSpaces: boolean;
+  trimTop: boolean;
+  printedPages: boolean;
+
+  // --- Motor ---
+  /** Respetar los estilos CSS que trae el libro. */
+  bookStyles: boolean;
+  /** Usar las fuentes del libro (si no, se aplica la fuente elegida). */
+  publisherFonts: boolean;
+  footnotes: "jump" | "popup" | "inline";
+
+  // --- Salud visual ---
+  /** Recordatorio de descanso tras N minutos seguidos (0 = apagado). */
+  breakReminderMin: number;
+  /** Alertas a horas fijas ("22:30"). */
+  scheduledAlerts: string[];
+  blueFilter: boolean;
+  blueOpacity: number;
+  /** Temperatura de color del filtro en kelvin (1000–6500). */
+  blueTemp: number;
+  ruler: boolean;
+  rulerHeight: number;
+  sentenceStart: boolean;
+  bionic: boolean;
+  /** Fracción de cada palabra que se resalta en modo biónico. */
+  bionicRatio: number;
+
+  // --- Barra de herramientas ---
+  toolbarRows: 1 | 2;
+  toolbarItems: ToolId[];
+  customTheme: CustomTheme;
   /** Última forma y color de remarcado usados. */
   markStyle: MarkStyle;
   markColor: HighlightColor;
@@ -201,6 +283,40 @@ export interface AppSettings {
   lastBackupAt?: number;
   sampleOffered: boolean;
   backupNagDismissedAt?: number;
+  /** Preguntar antes de guardar un libro que llega desde otra app. */
+  confirmExternalSave: boolean;
+  sync: SyncConfig;
+  dictionary: DictEntry[];
+  /** Buscar en un diccionario en línea si la palabra no está en el propio. */
+  onlineDictionary: boolean;
+}
+
+export type SyncProvider = "none" | "webdav" | "dropbox" | "gdrive" | "ftp";
+
+export interface SyncConfig {
+  provider: SyncProvider;
+  /** WebDAV / FTP: URL del servidor o carpeta. */
+  url: string;
+  user: string;
+  password: string;
+  /** Dropbox / Google Drive: token de acceso OAuth. */
+  token: string;
+  lastSyncAt?: number;
+  auto: boolean;
+}
+
+export interface DictEntry {
+  word: string;
+  definition: string;
+  createdAt: number;
+}
+
+/** Registro diario de lectura de un libro. */
+export interface BookDay {
+  ms: number;
+  /** Avance global (0–1) al empezar y al terminar ese día. */
+  from: number;
+  to: number;
 }
 
 export interface DayStats {
@@ -237,6 +353,39 @@ export interface Progress {
   totalRsvpWords: number;
   bestRsvpWpm: number;
   booksFinished: number;
+  /** Protectores de racha disponibles. */
+  freezes: number;
+  /** Días que salvó un protector (no suman a la racha, pero no la cortan). */
+  frozenDays: string[];
+  /** Último día en que se ganó un protector (para no darlo dos veces). */
+  freezeAwardDay?: string;
+}
+
+/** Preferencias de la comunidad y novedades pendientes de publicar. */
+export interface CommunitySettings {
+  /** Publicar en Novedades los libros que termino. */
+  autoShareBooks: boolean;
+  /** Publicar logros, rachas, niveles y ascensos de liga. */
+  autoShareMilestones: boolean;
+  /** Mostrar en el perfil el libro que estoy leyendo. */
+  showReadingNow: boolean;
+  /** Hasta cuándo se vieron las novedades de amigos (ISO). */
+  feedSeenAt?: string;
+  /** Semana de liga cuyo resultado ya se mostró. */
+  seenLeagueWeek?: string;
+  /** Novedades creadas sin conexión, pendientes de publicar. */
+  outbox: OutboxPost[];
+}
+
+export interface OutboxPost {
+  id: string;
+  kind: PostKind;
+  data: PostData;
+  createdAt: number;
+}
+
+export function defaultCommunity(): CommunitySettings {
+  return { autoShareBooks: true, autoShareMilestones: true, showReadingNow: true, outbox: [] };
 }
 
 export interface PersistedState {
@@ -253,6 +402,7 @@ export interface PersistedState {
   reader: ReaderSettings;
   app: AppSettings;
   progress: Progress;
+  community: CommunitySettings;
 }
 
 export const DEFAULT_READER: ReaderSettings = {
@@ -277,6 +427,39 @@ export const DEFAULT_READER: ReaderSettings = {
   rsvpWpm: 300,
   rsvpChunk: 1,
   pdfZoom: 1,
+  edgeBrightness: true,
+  edgeFontSize: true,
+  tiltPaging: false,
+  tiltThreshold: 22,
+  pageSound: false,
+  pageSoundVolume: 0.5,
+  dualPage: "auto",
+  allowScroll: true,
+  timeLeft: "chapter",
+  miniStatus: false,
+  progressDisplay: "percent",
+  edgeGuard: 0,
+  autoScrollSpeed: 30,
+  cleanEmptyLines: false,
+  cleanSpaces: false,
+  trimTop: true,
+  printedPages: true,
+  bookStyles: false,
+  publisherFonts: false,
+  footnotes: "popup",
+  breakReminderMin: 0,
+  scheduledAlerts: [],
+  blueFilter: false,
+  blueOpacity: 0.3,
+  blueTemp: 3000,
+  ruler: false,
+  rulerHeight: 2.2,
+  sentenceStart: false,
+  bionic: false,
+  bionicRatio: 0.45,
+  toolbarRows: 1,
+  toolbarItems: ["toc", "format", "night", "tts", "rsvp", "draw", "crop"],
+  customTheme: { bg: "#fdf6e3", fg: "#3b3226", link: "#b05a00", dark: false },
   markStyle: "highlight",
   markColor: "yellow",
   inkTool: "pen",
@@ -284,6 +467,8 @@ export const DEFAULT_READER: ReaderSettings = {
   inkSize: 2,
   inkShapes: true,
 };
+
+export const DEFAULT_SYNC: SyncConfig = { provider: "none", url: "", user: "", password: "", token: "", auto: false };
 
 export const DEFAULT_APP: AppSettings = {
   theme: "system",
@@ -293,6 +478,10 @@ export const DEFAULT_APP: AppSettings = {
   librarySort: "recent",
   trainingSource: "classics",
   sampleOffered: false,
+  confirmExternalSave: true,
+  sync: { ...DEFAULT_SYNC },
+  dictionary: [],
+  onlineDictionary: true,
 };
 
 export const DEFAULT_PROGRESS: Progress = {
@@ -305,6 +494,8 @@ export const DEFAULT_PROGRESS: Progress = {
   totalRsvpWords: 0,
   bestRsvpWpm: 0,
   booksFinished: 0,
+  freezes: 1,
+  frozenDays: [],
 };
 
 export function emptyDay(): DayStats {
@@ -325,7 +516,8 @@ export function defaultState(): PersistedState {
     readingList: [],
     reader: { ...DEFAULT_READER },
     app: { ...DEFAULT_APP },
-    progress: { ...DEFAULT_PROGRESS, achievements: {}, days: {}, games: {}, wpmHistory: [] },
+    progress: { ...DEFAULT_PROGRESS, achievements: {}, days: {}, games: {}, wpmHistory: [], frozenDays: [] },
+    community: defaultCommunity(),
   };
 }
 
@@ -365,15 +557,33 @@ export function migrateState(raw: unknown): PersistedState {
     looseNotes: list(s.looseNotes, (n) => !!n?.id),
     notebooks,
     readingList: list(s.readingList, (r) => !!r?.id && typeof r.title === "string"),
-    reader: { ...DEFAULT_READER, ...(s.reader ?? {}) },
-    app: { ...DEFAULT_APP, ...(s.app ?? {}) },
+    reader: {
+      ...DEFAULT_READER,
+      ...(s.reader ?? {}),
+      customTheme: { ...DEFAULT_READER.customTheme, ...(s.reader?.customTheme ?? {}) },
+      toolbarItems: Array.isArray(s.reader?.toolbarItems) ? s.reader!.toolbarItems.filter((t) => ALL_TOOLS.includes(t)) : [...DEFAULT_READER.toolbarItems],
+      scheduledAlerts: Array.isArray(s.reader?.scheduledAlerts) ? s.reader!.scheduledAlerts : [],
+    },
+    app: {
+      ...DEFAULT_APP,
+      ...(s.app ?? {}),
+      sync: { ...DEFAULT_SYNC, ...(s.app?.sync ?? {}) },
+      dictionary: Array.isArray(s.app?.dictionary) ? s.app!.dictionary : [],
+    },
     progress: {
       ...DEFAULT_PROGRESS,
       ...(s.progress ?? {}),
       achievements: { ...(s.progress?.achievements ?? {}) },
       games: { ...(s.progress?.games ?? {}) },
       wpmHistory: Array.isArray(s.progress?.wpmHistory) ? s.progress!.wpmHistory : [],
+      frozenDays: Array.isArray(s.progress?.frozenDays) ? s.progress!.frozenDays.filter((k) => typeof k === "string") : [],
+      freezes: Math.max(0, Math.min(MAX_FREEZES, Number(s.progress?.freezes ?? DEFAULT_PROGRESS.freezes) || 0)),
       days,
+    },
+    community: {
+      ...defaultCommunity(),
+      ...(s.community ?? {}),
+      outbox: Array.isArray(s.community?.outbox) ? s.community!.outbox : [],
     },
   };
 }

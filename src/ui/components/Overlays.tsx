@@ -127,7 +127,7 @@ export function Celebrations() {
       <SparkleBurst key={current.id} />
       <div className="celebrate" onClick={(e) => e.stopPropagation()}>
         <div className="medal">{current.icon}</div>
-        <div className="kicker">{current.kind === "level" ? "Subiste de nivel" : "Logro desbloqueado"}</div>
+        <div className="kicker">{current.kind === "level" ? "Subiste de nivel" : current.kind === "league" ? "Liga semanal" : "Logro desbloqueado"}</div>
         <h2>{current.title}</h2>
         <p>{current.subtitle}</p>
         <button className="btn btn-primary btn-block" onClick={shift}>

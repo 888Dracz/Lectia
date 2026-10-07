@@ -1,4 +1,10 @@
 import {
+  BookA,
+  Cloud,
+  CloudDownload,
+  CloudUpload,
+  RefreshCw,
+  Settings2,
   ArchiveRestore,
   Download,
   HardDrive,
@@ -10,9 +16,13 @@ import {
   Smartphone,
   Target,
   Trash,
+  Trophy,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { createBackup, deliverFile, markBackupDone, readBackup, restoreBackup } from "../../backup/backup";
+import { createBackup, createSettingsBackup, deliverFile, markBackupDone, readBackup, restoreBackup, restoreSettingsBackup } from "../../backup/backup";
+import { runSync, type SyncDirection } from "../../sync/sync";
+import type { ReaderThemeId, SyncProvider } from "../../store/state";
+import { promptDialog } from "../components/Dialog";
 import { clearEverything } from "../../lib/db";
 import { formatBytes, formatDate, formatRelative } from "../../lib/util";
 import { defaultState } from "../../store/state";
@@ -21,6 +31,7 @@ import { toast, useUi } from "../../store/ui";
 import { Range, Segmented, Switch } from "../components/controls";
 import { choiceDialog, confirmDialog } from "../components/Dialog";
 import { pickFiles } from "../library/importFlow";
+import { navigate } from "../../lib/router";
 import { installPrompt, useInstallAvailable } from "../../pwa";
 
 const ACCENTS = [
@@ -112,6 +123,29 @@ export function SettingsScreen() {
       }
     }, ".zip,application/zip");
 
+  const sync = app.sync;
+  const setSync = (patch: Partial<typeof sync>) => setApp({ sync: { ...sync, ...patch } });
+  const [syncing, setSyncing] = useState(false);
+  const doSync = async (dir: SyncDirection) => {
+    setSyncing(true);
+    try {
+      toast(await runSync(dir), { tone: "success", icon: "☁️" });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "No se pudo sincronizar";
+      toast(/Failed to fetch|NetworkError|Load failed/i.test(msg) ? "No se pudo conectar con el servidor (¿sin conexión o el servidor no permite CORS?)" : msg, { tone: "error" }, 6000);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const addWord = async () => {
+    const word = (await promptDialog("Nueva palabra", "", "Palabra"))?.trim().toLowerCase();
+    if (!word) return;
+    const definition = await promptDialog(`Definición de “${word}”`, app.dictionary.find((d) => d.word === word)?.definition ?? "", "Definición");
+    if (definition === null) return;
+    setApp({ dictionary: [...app.dictionary.filter((d) => d.word !== word), { word, definition: definition.trim(), createdAt: Date.now() }] });
+  };
+
   const wipe = async () => {
     const ok = await confirmDialog(
       "¿Borrar todo?",
@@ -162,6 +196,99 @@ export function SettingsScreen() {
               <ArchiveRestore size={16} /> Restaurar
             </button>
           </div>
+          <div className="backup-actions">
+            <button className="btn btn-sm" onClick={() => void deliverFile(createSettingsBackup(), true).then(() => toast("Copia de ajustes guardada", { tone: "success" }))}>
+              <Settings2 size={16} /> Copiar ajustes
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() =>
+                pickFiles(async (files) => {
+                  if (!files[0]) return;
+                  try {
+                    await restoreSettingsBackup(files[0]);
+                    toast("Ajustes restaurados", { tone: "success" });
+                  } catch (e) {
+                    toast(e instanceof Error ? e.message : "No se pudo restaurar", { tone: "error" });
+                  }
+                }, ".json,application/json")
+              }
+            >
+              <ArchiveRestore size={16} /> Restaurar ajustes
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-title">Sincronización en la nube</div>
+        <div className="list">
+          <div className="list-item col">
+            <div className="row" style={{ width: "100%" }}>
+              <span className="li-icon">
+                <Cloud size={18} />
+              </span>
+              <span className="li-main">
+                <div className="li-title">Servicio</div>
+                <div className="li-sub">Progreso, marcadores y notas{sync.lastSyncAt ? ` · última vez ${formatRelative(sync.lastSyncAt)}` : ""}</div>
+              </span>
+            </div>
+            <Segmented<SyncProvider>
+              value={sync.provider}
+              onChange={(v) => setSync({ provider: v })}
+              options={[
+                { value: "none", label: "No" },
+                { value: "dropbox", label: "Dropbox" },
+                { value: "gdrive", label: "Drive" },
+                { value: "webdav", label: "WebDAV" },
+                { value: "ftp", label: "FTP" },
+              ]}
+            />
+          </div>
+          {(sync.provider === "webdav" || sync.provider === "ftp") && (
+            <div className="list-item col">
+              <input className="field" placeholder={sync.provider === "ftp" ? "https://servidor/carpeta (pasarela HTTP del FTP)" : "https://servidor/remote.php/dav/files/usuario/Lectia"} value={sync.url} onChange={(e) => setSync({ url: e.target.value.trim() })} />
+              <input className="field" placeholder="Usuario" autoComplete="username" value={sync.user} onChange={(e) => setSync({ user: e.target.value })} />
+              <input className="field" placeholder="Contraseña" type="password" autoComplete="current-password" value={sync.password} onChange={(e) => setSync({ password: e.target.value })} />
+              {sync.provider === "ftp" && (
+                <div className="li-sub">Los navegadores no hablan FTP: escribe la dirección https:// (WebDAV/HTTP) que ofrece tu servidor FTP.</div>
+              )}
+            </div>
+          )}
+          {(sync.provider === "dropbox" || sync.provider === "gdrive") && (
+            <div className="list-item col">
+              <input className="field" placeholder="Token de acceso" type="password" value={sync.token} onChange={(e) => setSync({ token: e.target.value.trim() })} />
+              <div className="li-sub">
+                {sync.provider === "dropbox"
+                  ? "Crea una app en dropbox.com/developers (permiso files.content.write) y genera un token de acceso."
+                  : "Genera un token OAuth con el permiso drive.appdata (p. ej. en el OAuth Playground de Google). Los datos se guardan en la carpeta privada de la app."}
+              </div>
+            </div>
+          )}
+          {sync.provider !== "none" && (
+            <>
+              <div className="list-item">
+                <span className="li-main">
+                  <div className="li-title">Sincronizar automáticamente</div>
+                  <div className="li-sub">Al abrir y al salir de la app</div>
+                </span>
+                <Switch on={sync.auto} onChange={(v) => setSync({ auto: v })} />
+              </div>
+              <div className="list-item">
+                <div className="backup-actions" style={{ width: "100%", marginTop: 0 }}>
+                  <button className="btn btn-sm" disabled={syncing} onClick={() => void doSync("upload")}>
+                    <CloudUpload size={16} /> Subir
+                  </button>
+                  <button className="btn btn-sm" disabled={syncing} onClick={() => void doSync("download")}>
+                    <CloudDownload size={16} /> Descargar
+                  </button>
+                  <button className="btn btn-sm btn-primary" disabled={syncing} onClick={() => void doSync("both")}>
+                    <RefreshCw size={16} /> Sincronizar
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </section>
 
@@ -202,6 +329,49 @@ export function SettingsScreen() {
               ))}
             </div>
           </div>
+          <div className="list-item col">
+            <div className="row" style={{ width: "100%" }}>
+              <span className="li-main li-title">Tema de lectura</span>
+            </div>
+            <Segmented<ReaderThemeId>
+              value={(["day", "night", "sepia", "custom"] as ReaderThemeId[]).includes(reader.theme) ? reader.theme : ("" as ReaderThemeId)}
+              onChange={(v) => setReader({ theme: v })}
+              options={[
+                { value: "day", label: "Diurno" },
+                { value: "night", label: "Nocturno" },
+                { value: "sepia", label: "Sepia" },
+                { value: "custom", label: "Personal" },
+              ]}
+            />
+            {reader.theme === "custom" && (
+              <div className="custom-theme">
+                {(["bg", "fg", "link"] as const).map((k) => (
+                  <label key={k} className="custom-color">
+                    <input type="color" value={reader.customTheme[k]} onChange={(e) => setReader({ customTheme: { ...reader.customTheme, [k]: e.target.value } })} />
+                    <span>{k === "bg" ? "Fondo" : k === "fg" ? "Texto" : "Enlaces"}</span>
+                  </label>
+                ))}
+                <label className="custom-color">
+                  <Switch on={reader.customTheme.dark} onChange={(v) => setReader({ customTheme: { ...reader.customTheme, dark: v } })} />
+                  <span>Oscuro</span>
+                </label>
+              </div>
+            )}
+          </div>
+          <div className="list-item col">
+            <div className="row" style={{ width: "100%" }}>
+              <span className="li-main li-title">Barra de herramientas del lector</span>
+            </div>
+            <Segmented
+              value={String(reader.toolbarRows) as "1" | "2"}
+              onChange={(v) => setReader({ toolbarRows: v === "2" ? 2 : 1 })}
+              options={[
+                { value: "1", label: "Línea simple" },
+                { value: "2", label: "Línea doble" },
+              ]}
+            />
+            <div className="li-sub">Los iconos se eligen en el lector › Aspecto › Pantalla.</div>
+          </div>
         </div>
       </section>
 
@@ -220,8 +390,8 @@ export function SettingsScreen() {
           </div>
           <div className="list-item">
             <span className="li-main">
-              <div className="li-title">Pantalla completa al leer</div>
-              <div className="li-sub">Oculta la barra del sistema</div>
+              <div className="li-title">Ocultar la barra de notificaciones</div>
+              <div className="li-sub">Pantalla completa al leer</div>
             </span>
             <Switch on={reader.fullscreen} onChange={(v) => setReader({ fullscreen: v })} />
           </div>
@@ -237,8 +407,73 @@ export function SettingsScreen() {
       </section>
 
       <section className="section">
+        <div className="section-title">Diccionario</div>
+        <div className="list">
+          <div className="list-item">
+            <span className="li-icon">
+              <BookA size={18} />
+            </span>
+            <span className="li-main">
+              <div className="li-title">Mi diccionario</div>
+              <div className="li-sub">{app.dictionary.length} {app.dictionary.length === 1 ? "palabra" : "palabras"} · se consulta al seleccionar texto › Definir</div>
+            </span>
+            <button className="btn btn-sm" onClick={() => void addWord()}>
+              Agregar
+            </button>
+          </div>
+          {[...app.dictionary]
+            .sort((a, b) => a.word.localeCompare(b.word, "es"))
+            .map((d) => (
+              <div key={d.word} className="list-item">
+                <span className="li-main">
+                  <div className="li-title">{d.word}</div>
+                  <div className="li-sub">{d.definition}</div>
+                </span>
+                <button className="icon-btn" aria-label={`Quitar ${d.word}`} onClick={() => setApp({ dictionary: app.dictionary.filter((x) => x.word !== d.word) })}>
+                  <Trash size={16} />
+                </button>
+              </div>
+            ))}
+          <div className="list-item">
+            <span className="li-main">
+              <div className="li-title">Buscar en línea si no está</div>
+              <div className="li-sub">Diccionario de la RAE</div>
+            </span>
+            <Switch on={app.onlineDictionary} onChange={(v) => setApp({ onlineDictionary: v })} />
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-title">Comunidad</div>
+        <div className="list">
+          <button className="list-item" onClick={() => navigate({ name: "profile" })}>
+            <span className="li-icon">
+              <Trophy size={18} />
+            </span>
+            <span className="li-main">
+              <div className="li-title">Mi perfil y privacidad</div>
+              <div className="li-sub">Qué compartes con tus amigos, cuenta y correo</div>
+            </span>
+          </button>
+        </div>
+      </section>
+
+      <section className="section">
         <div className="section-title">Dispositivo</div>
         <div className="list">
+          <div className="list-item">
+            <span className="li-main">
+              <div className="li-title">Confirmar al recibir libros de otras apps</div>
+              <div className="li-sub">Pregunta “Guardar archivo de libro” antes de agregarlo</div>
+            </span>
+            <Switch on={app.confirmExternalSave} onChange={(v) => setApp({ confirmExternalSave: v })} />
+          </div>
+          <div className="list-item col">
+            <div className="li-title">Bordes táctiles inactivos · {reader.edgeGuard ? `${reader.edgeGuard} px` : "no"}</div>
+            <div className="li-sub">Evita toques accidentales en pantallas completas o curvas</div>
+            <Range value={reader.edgeGuard} min={0} max={40} step={2} onChange={(v) => setReader({ edgeGuard: v })} label="Borde inactivo" />
+          </div>
           {installable && (
             <button className="list-item" onClick={() => void installPrompt()}>
               <span className="li-icon">
@@ -303,7 +538,7 @@ export function SettingsScreen() {
           <div className="list-item">
             <span className="li-main">
               <div className="li-title">Formatos</div>
-              <div className="li-sub">EPUB, PDF, Word (.docx), TXT, Markdown, HTML, FB2 y cómics CBZ</div>
+              <div className="li-sub">EPUB, PDF, Kindle (MOBI/AZW3), Word (.docx), TXT, Markdown, HTML, FB2 y cómics CBZ</div>
             </span>
           </div>
         </div>

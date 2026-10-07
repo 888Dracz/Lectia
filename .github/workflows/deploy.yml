@@ -1,7 +1,7 @@
 name: Publicar en GitHub Pages
 
 # Al fusionar a main se construye la app y se publica en
-# https://888dracz.github.io/lectia/ (también se puede lanzar a mano).
+# https://888dracz.github.io/Lectia/ (también se puede lanzar a mano).
 on:
   push:
     branches: [main]
@@ -31,6 +31,10 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Comunidad (opcional): sin estas variables la app usa la demostración local.
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL || secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY || secrets.SUPABASE_ANON_KEY }}
 
       - name: Configurar Pages
         uses: actions/configure-pages@v5

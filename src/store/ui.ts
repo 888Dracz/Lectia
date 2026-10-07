@@ -12,7 +12,7 @@ export interface Toast {
 
 export interface Celebration {
   id: string;
-  kind: "achievement" | "level";
+  kind: "achievement" | "level" | "league";
   title: string;
   subtitle: string;
   icon: string;
