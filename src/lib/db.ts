@@ -1,6 +1,7 @@
 // Base de datos local (IndexedDB). Guarda los archivos de los libros, las
-// portadas, el estado de la app y la "bandeja" de archivos compartidos desde
-// otras apps (Web Share Target). Este módulo también lo usa el service worker.
+// portadas, las imágenes de los cuadernos (recortes y trazos), el estado de la
+// app y la "bandeja" de archivos compartidos desde otras apps (Web Share
+// Target). Este módulo también lo usa el service worker.
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 
 export interface InboxItem {
@@ -12,12 +13,13 @@ export interface InboxItem {
 interface LectiaDB extends DBSchema {
   files: { key: string; value: Blob };
   covers: { key: string; value: Blob };
+  media: { key: string; value: Blob };
   kv: { key: string; value: unknown };
   inbox: { key: string; value: InboxItem };
 }
 
 const DB_NAME = "campanita";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise: Promise<IDBPDatabase<LectiaDB>> | null = null;
 
@@ -27,8 +29,14 @@ export function getDb(): Promise<IDBPDatabase<LectiaDB>> {
       upgrade(db) {
         if (!db.objectStoreNames.contains("files")) db.createObjectStore("files");
         if (!db.objectStoreNames.contains("covers")) db.createObjectStore("covers");
+        if (!db.objectStoreNames.contains("media")) db.createObjectStore("media");
         if (!db.objectStoreNames.contains("kv")) db.createObjectStore("kv");
         if (!db.objectStoreNames.contains("inbox")) db.createObjectStore("inbox", { keyPath: "id" });
+      },
+      // Otra pestaña (o el service worker) necesita una versión nueva: se cede.
+      blocking() {
+        void dbPromise?.then((db) => db.close());
+        dbPromise = null;
       },
     });
   }
@@ -63,6 +71,18 @@ export async function deleteCover(id: string): Promise<void> {
   await (await getDb()).delete("covers", id);
 }
 
+export async function getMedia(id: string): Promise<Blob | undefined> {
+  return (await getDb()).get("media", id);
+}
+
+export async function putMedia(id: string, blob: Blob): Promise<void> {
+  await (await getDb()).put("media", blob, id);
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+  await (await getDb()).delete("media", id);
+}
+
 export async function getKV<T>(key: string): Promise<T | undefined> {
   return (await getDb()).get("kv", key) as Promise<T | undefined>;
 }
@@ -84,5 +104,5 @@ export async function takeInbox(): Promise<InboxItem[]> {
 
 export async function clearEverything(): Promise<void> {
   const db = await getDb();
-  await Promise.all([db.clear("files"), db.clear("covers"), db.clear("kv"), db.clear("inbox")]);
+  await Promise.all([db.clear("files"), db.clear("covers"), db.clear("media"), db.clear("kv"), db.clear("inbox")]);
 }

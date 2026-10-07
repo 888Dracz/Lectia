@@ -1,12 +1,13 @@
-import { Bookmark, Download, NotebookPen, Trash } from "lucide-react";
+import { Bookmark, NotebookPen, NotebookText, Trash } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { BookContent, BookMeta } from "../../books/types";
 import { formatDate } from "../../lib/util";
+import { markStyleInfo } from "../../notes/marks";
 import type { Bookmark as BookmarkT, Highlight } from "../../store/state";
 import { useStore } from "../../store/store";
-import { deliverFile } from "../../backup/backup";
 import { Segmented } from "../components/controls";
 import { Sheet } from "../components/Sheet";
+import { MarkSample } from "./Annotations";
 import { HIGHLIGHT_COLORS } from "./themes";
 
 interface Props {
@@ -19,16 +20,20 @@ interface Props {
   onGoBookmark: (b: BookmarkT) => void;
   onGoHighlight: (h: Highlight) => void;
   onEditHighlight: (h: Highlight) => void;
+  onOpenNotebook: () => void;
 }
 
-export function TocSheet({ open, onClose, book, content, currentChapter, onGoChapter, onGoBookmark, onGoHighlight, onEditHighlight }: Props) {
+export function TocSheet({ open, onClose, book, content, currentChapter, onGoChapter, onGoBookmark, onGoHighlight, onEditHighlight, onOpenNotebook }: Props) {
   const [tab, setTab] = useState<"toc" | "marks" | "notes">("toc");
   const allBookmarks = useStore((s) => s.bookmarks);
   const allHighlights = useStore((s) => s.highlights);
   const removeBookmark = useStore((s) => s.removeBookmark);
-  const bookmarks = useMemo(() => allBookmarks.filter((b) => b.bookId === book.id).sort((a, b) => a.percent - b.percent), [allBookmarks, book.id]);
+  const bookmarks = useMemo(
+    () => allBookmarks.filter((b) => b.bookId === book.id && !b.discardedAt).sort((a, b) => a.percent - b.percent),
+    [allBookmarks, book.id]
+  );
   const highlights = useMemo(
-    () => allHighlights.filter((h) => h.bookId === book.id).sort((a, b) => a.chapter - b.chapter || a.start - b.start),
+    () => allHighlights.filter((h) => h.bookId === book.id && !h.discardedAt).sort((a, b) => a.chapter - b.chapter || a.start - b.start),
     [allHighlights, book.id]
   );
   const toc = content.toc;
@@ -42,26 +47,6 @@ export function TocSheet({ open, onClose, book, content, currentChapter, onGoCha
 
   const chapterTitle = (c: number) =>
     content.kind === "pdf" ? `Página ${c + 1}` : content.chapters[c]?.title ?? `Capítulo ${c + 1}`;
-
-  const exportNotes = async () => {
-    const lines = [`# ${book.title}`, book.author ? `*${book.author}*` : "", "", `Exportado desde Lectia el ${formatDate(Date.now())}.`, ""];
-    let lastChapter = -1;
-    for (const h of highlights) {
-      if (h.chapter !== lastChapter) {
-        lines.push("", `## ${chapterTitle(h.chapter)}`, "");
-        lastChapter = h.chapter;
-      }
-      lines.push(`> ${h.text.replace(/\n+/g, " ")}`);
-      if (h.note) lines.push("", `📝 ${h.note}`);
-      lines.push("");
-    }
-    if (bookmarks.length) {
-      lines.push("", "## Marcadores", "");
-      for (const b of bookmarks) lines.push(`- ${b.label} (${Math.round(b.percent * 100)}%)`);
-    }
-    const file = new File([lines.join("\n")], `${book.title} - notas.md`, { type: "text/markdown" });
-    await deliverFile(file, true);
-  };
 
   return (
     <Sheet open={open} onClose={onClose} title={book.title} height="82dvh">
@@ -123,21 +108,26 @@ export function TocSheet({ open, onClose, book, content, currentChapter, onGoCha
           {highlights.length === 0 ? (
             <div className="notes-empty">
               <NotebookPen size={30} />
-              <p>Mantén pulsado el texto y arrastra para subrayar o agregar una nota.</p>
+              <p>Mantén pulsado el texto y arrastra para resaltar, subrayar, poner en negrita o agregar una nota.</p>
             </div>
-          ) : (
-            <button className="btn btn-outline btn-sm" style={{ alignSelf: "flex-start", marginBottom: 6 }} onClick={() => void exportNotes()}>
-              <Download size={16} /> Exportar notas
-            </button>
-          )}
+          ) : null}
+          <button className="btn btn-outline btn-sm" style={{ alignSelf: "flex-start", marginBottom: 6 }} onClick={onOpenNotebook}>
+            <NotebookText size={16} /> Abrir el cuaderno completo
+          </button>
           {highlights.map((h) => (
             <div key={h.id} className="note-card" style={{ ["--hl" as string]: HIGHLIGHT_COLORS[h.color].dot }}>
               <button className="note-main" onClick={() => onGoHighlight(h)}>
                 <div className="note-head">
                   <span className="hl-dot" />
-                  <span className="ellipsis">{chapterTitle(h.chapter)}</span>
+                  <span className="ellipsis">
+                    {markStyleInfo(h.style).noun} · {chapterTitle(h.chapter)}
+                  </span>
                 </div>
-                <div className="note-text quote">{h.text}</div>
+                <div className="note-text quote">
+                  <MarkSample style={h.style} color={h.color}>
+                    {h.text}
+                  </MarkSample>
+                </div>
                 {h.note && <div className="note-note">📝 {h.note}</div>}
               </button>
               <button className="icon-btn" aria-label="Editar" onClick={() => onEditHighlight(h)}>

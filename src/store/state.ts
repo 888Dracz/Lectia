@@ -1,7 +1,7 @@
 // Estado persistente de la app: biblioteca, notas, ajustes y progreso.
 import type { BookMeta } from "../books/types";
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export interface Collection {
   id: string;
@@ -18,9 +18,14 @@ export interface Bookmark {
   percent: number;
   label: string;
   createdAt: number;
+  /** Descartado: va a la papelera del cuaderno (se puede recuperar). */
+  discardedAt?: number;
 }
 
-export type HighlightColor = "yellow" | "green" | "blue" | "pink";
+export type HighlightColor = "yellow" | "green" | "blue" | "pink" | "orange" | "violet";
+
+/** Forma de remarcar un fragmento. */
+export type MarkStyle = "highlight" | "underline" | "wavy" | "bold" | "box" | "strike";
 
 export interface Highlight {
   id: string;
@@ -31,8 +36,121 @@ export interface Highlight {
   end: number;
   text: string;
   color: HighlightColor;
+  style: MarkStyle;
   note: string;
+  /** Avance global aproximado (para ordenar el cuaderno como el libro). */
+  percent?: number;
   createdAt: number;
+  discardedAt?: number;
+}
+
+// --- Escritura a mano -------------------------------------------------------------
+
+export type InkTool = "pen" | "marker";
+
+/**
+ * Dónde se ancla un trazo:
+ * - "text": a un carácter del capítulo; los puntos van en "em" desde la esquina
+ *   superior izquierda de ese carácter, así el trazo acompaña al texto aunque
+ *   cambie el tamaño de letra o la paginación.
+ * - "page": a la página (PDF original, cómics); los puntos van en fracciones
+ *   del ancho de la página.
+ */
+export type InkAnchor = { kind: "text"; offset: number } | { kind: "page" };
+
+export interface InkStroke {
+  id: string;
+  tool: InkTool;
+  color: string;
+  /** Grosor en las mismas unidades que los puntos. */
+  width: number;
+  /** x0, y0, x1, y1… */
+  points: number[];
+  anchor: InkAnchor;
+  shape?: "line" | "ellipse" | "rect";
+}
+
+export interface Drawing {
+  id: string;
+  bookId: string;
+  chapter: number;
+  /** "page": páginas originales del PDF; "flow": texto adaptable. */
+  view: "page" | "flow";
+  strokes: InkStroke[];
+  /** Texto cercano (contexto y búsqueda). */
+  text: string;
+  /** Vista previa guardada en la tabla de medios. */
+  mediaId?: string;
+  fraction: number;
+  percent: number;
+  createdAt: number;
+  updatedAt: number;
+  discardedAt?: number;
+}
+
+/** Recorte (captura) de una parte de la página. */
+export interface Clip {
+  id: string;
+  bookId: string;
+  chapter: number;
+  view: "page" | "flow";
+  /** Para volver al lugar: desplazamiento de texto (flow) o fracción de página. */
+  offset?: number;
+  fraction: number;
+  percent: number;
+  mediaId: string;
+  width: number;
+  height: number;
+  text: string;
+  caption: string;
+  createdAt: number;
+  discardedAt?: number;
+}
+
+export type NoteTint = "lemon" | "peach" | "mint" | "sky" | "lilac";
+
+/** Nota escrita directamente en el cuaderno. */
+export interface LooseNote {
+  id: string;
+  bookId: string;
+  text: string;
+  tint: NoteTint;
+  /** Lugar del libro al que se refiere (opcional). */
+  chapter?: number;
+  fraction?: number;
+  percent?: number;
+  createdAt: number;
+  updatedAt: number;
+  discardedAt?: number;
+}
+
+export type NotebookCover = "terracota" | "bosque" | "noche" | "ciruela" | "mostaza" | "oceano" | "rosa" | "grafito";
+export type NotebookPaper = "lined" | "dots" | "grid" | "plain";
+
+/** Cuaderno de notas de un libro (aspecto y nombre; las entradas van aparte). */
+export interface Notebook {
+  bookId: string;
+  name: string;
+  cover: NotebookCover;
+  paper: NotebookPaper;
+  sticker: string;
+  /** Copia del título y autor por si el libro se borra y se conserva el cuaderno. */
+  bookTitle: string;
+  bookAuthor: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** Elemento de la lista por leer (un libro de la biblioteca o uno que aún no tienes). */
+export interface ReadingListItem {
+  id: string;
+  bookId?: string;
+  title: string;
+  author: string;
+  note: string;
+  addedAt: number;
+  doneAt?: number;
+  discardedAt?: number;
 }
 
 export type ReaderThemeId = "day" | "paper" | "sepia" | "mint" | "dusk" | "night" | "amoled" | "moon";
@@ -60,6 +178,14 @@ export interface ReaderSettings {
   rsvpWpm: number;
   rsvpChunk: number;
   pdfZoom: number;
+  /** Última forma y color de remarcado usados. */
+  markStyle: MarkStyle;
+  markColor: HighlightColor;
+  inkTool: InkTool | "eraser";
+  inkColor: string;
+  inkSize: number;
+  /** Convierte círculos, líneas y rectángulos dibujados a mano en trazos limpios. */
+  inkShapes: boolean;
 }
 
 export type LibraryView = "grid" | "list" | "shelf";
@@ -119,6 +245,11 @@ export interface PersistedState {
   collections: Collection[];
   bookmarks: Bookmark[];
   highlights: Highlight[];
+  drawings: Drawing[];
+  clips: Clip[];
+  looseNotes: LooseNote[];
+  notebooks: Record<string, Notebook>;
+  readingList: ReadingListItem[];
   reader: ReaderSettings;
   app: AppSettings;
   progress: Progress;
@@ -146,6 +277,12 @@ export const DEFAULT_READER: ReaderSettings = {
   rsvpWpm: 300,
   rsvpChunk: 1,
   pdfZoom: 1,
+  markStyle: "highlight",
+  markColor: "yellow",
+  inkTool: "pen",
+  inkColor: "#e5484d",
+  inkSize: 2,
+  inkShapes: true,
 };
 
 export const DEFAULT_APP: AppSettings = {
@@ -181,6 +318,11 @@ export function defaultState(): PersistedState {
     collections: [],
     bookmarks: [],
     highlights: [],
+    drawings: [],
+    clips: [],
+    looseNotes: [],
+    notebooks: {},
+    readingList: [],
     reader: { ...DEFAULT_READER },
     app: { ...DEFAULT_APP },
     progress: { ...DEFAULT_PROGRESS, achievements: {}, days: {}, games: {}, wpmHistory: [] },
@@ -206,12 +348,23 @@ export function migrateState(raw: unknown): PersistedState {
   }
   const days: Record<string, DayStats> = {};
   for (const [k, d] of Object.entries(s.progress?.days ?? {})) days[k] = { ...emptyDay(), ...d };
+  const list = <T,>(v: T[] | undefined, ok: (x: T) => boolean = (x) => !!x) => (Array.isArray(v) ? v.filter(ok) : []);
+  const notebooks: Record<string, Notebook> = {};
+  for (const [id, n] of Object.entries(s.notebooks ?? {})) {
+    if (n && typeof n === "object" && n.bookId) notebooks[id] = n;
+  }
   return {
     version: STATE_VERSION,
     books,
     collections: Array.isArray(s.collections) ? s.collections : base.collections,
-    bookmarks: Array.isArray(s.bookmarks) ? s.bookmarks : [],
-    highlights: Array.isArray(s.highlights) ? s.highlights : [],
+    bookmarks: list(s.bookmarks),
+    // Los subrayados anteriores a los estilos eran todos "resaltados".
+    highlights: list(s.highlights).map((h) => (h.style ? h : { ...h, style: "highlight" as const })),
+    drawings: list(s.drawings, (d) => !!d?.id && Array.isArray(d.strokes)),
+    clips: list(s.clips, (c) => !!c?.id && !!c.mediaId),
+    looseNotes: list(s.looseNotes, (n) => !!n?.id),
+    notebooks,
+    readingList: list(s.readingList, (r) => !!r?.id && typeof r.title === "string"),
     reader: { ...DEFAULT_READER, ...(s.reader ?? {}) },
     app: { ...DEFAULT_APP, ...(s.app ?? {}) },
     progress: {

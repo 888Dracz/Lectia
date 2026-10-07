@@ -27,6 +27,7 @@ import { Cover } from "../components/Cover";
 import { Bar, Ring } from "../components/controls";
 import { promptDialog } from "../components/Dialog";
 import { Sheet } from "../components/Sheet";
+import { ReadingListStrip } from "../readinglist/ReadingListStrip";
 import { BookActionsSheet } from "./BookSheets";
 import { addWelcomeBook, BOOK_ACCEPT, pickFiles, runImport } from "./importFlow";
 import { formatRemaining, openBook, remainingMinutes } from "./useOpenBook";
@@ -199,6 +200,8 @@ export function LibraryScreen() {
 
       {current && !searching && filter === "all" && <ContinueCard book={current} />}
 
+      {all.length > 0 && !searching && filter === "all" && <ReadingListStrip />}
+
       {showBackupNag && !searching && (
         <div className="nag">
           <ShieldCheck size={22} />
@@ -222,7 +225,7 @@ export function LibraryScreen() {
           <div className="chips lib-chips">
             <FilterChip active={filter === "all"} onClick={() => setFilter("all")} label="Todos" count={counts.all} />
             <FilterChip active={filter === "reading"} onClick={() => setFilter("reading")} label="Leyendo" count={counts.reading} />
-            <FilterChip active={filter === "unread"} onClick={() => setFilter("unread")} label="Por leer" count={counts.unread} />
+            <FilterChip active={filter === "unread"} onClick={() => setFilter("unread")} label="Sin empezar" count={counts.unread} />
             <FilterChip active={filter === "finished"} onClick={() => setFilter("finished")} label="Terminados" count={counts.finished} />
             <FilterChip active={filter === "fav"} onClick={() => setFilter("fav")} label={<><Heart size={14} /> Favoritos</>} count={counts.fav} />
             {collections.map((c) => (
