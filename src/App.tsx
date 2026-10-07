@@ -73,7 +73,7 @@ export function App() {
   if (!hydrated) {
     return (
       <div className="splash">
-        <img src={`${import.meta.env.BASE_URL}icon-512.png`} alt="Lectia" />
+        <img src={`${import.meta.env.BASE_URL}icon-512-v2.png`} alt="Lectia" />
       </div>
     );
   }

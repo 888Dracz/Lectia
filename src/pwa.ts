@@ -16,7 +16,21 @@ const emit = () => listeners.forEach((l) => l());
 
 export function setupPwa() {
   if ("serviceWorker" in navigator && import.meta.env.PROD) {
-    registerSW({ immediate: true });
+    // Busca versiones nuevas al volver a la app y cada hora; al encontrar una,
+    // el service worker toma el control y la página se recarga sola.
+    registerSW({
+      immediate: true,
+      onRegisteredSW(_url, registration) {
+        if (!registration) return;
+        const check = () => {
+          if (navigator.onLine) registration.update().catch(() => undefined);
+        };
+        setInterval(check, 60 * 60 * 1000);
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState === "visible") check();
+        });
+      },
+    });
   }
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
