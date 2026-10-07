@@ -21,7 +21,9 @@ import "./styles/library.css";
 import "./styles/reader.css";
 import "./styles/games.css";
 import "./styles/progress.css";
+import "./styles/community.css";
 import { App } from "./App";
+import { setupCommunity } from "./community/store";
 import { consumeSharedFiles, setupPwa } from "./pwa";
 import { useStore } from "./store/store";
 
@@ -37,5 +39,6 @@ void useStore
   .hydrate()
   .then(() => {
     useStore.getState().checkAchievements();
+    setupCommunity();
     return consumeSharedFiles();
   });

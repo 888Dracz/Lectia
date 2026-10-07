@@ -7,8 +7,15 @@ export type Route =
   | { name: "reader"; bookId: string }
   | { name: "train" }
   | { name: "game"; game: string }
+  | { name: "community"; tab: CommunityTab }
+  | { name: "profile"; username?: string }
   | { name: "progress" }
   | { name: "settings" };
+
+export type CommunityTab = "league" | "friends" | "feed";
+
+const COMMUNITY_TABS: Record<string, CommunityTab> = { liga: "league", amigos: "friends", novedades: "feed" };
+const COMMUNITY_SLUGS: Record<CommunityTab, string> = { league: "liga", friends: "amigos", feed: "novedades" };
 
 export function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, "").split("/").filter(Boolean).map(decodeURIComponent);
@@ -17,6 +24,10 @@ export function parseHash(hash: string): Route {
       return parts[1] ? { name: "reader", bookId: parts[1] } : { name: "library" };
     case "entrenar":
       return parts[1] ? { name: "game", game: parts[1] } : { name: "train" };
+    case "comunidad":
+      return { name: "community", tab: COMMUNITY_TABS[parts[1]] ?? "league" };
+    case "perfil":
+      return parts[1] ? { name: "profile", username: parts[1].toLowerCase() } : { name: "profile" };
     case "progreso":
       return { name: "progress" };
     case "ajustes":
@@ -34,6 +45,10 @@ export function routeToHash(r: Route): string {
       return "#/entrenar";
     case "game":
       return `#/entrenar/${encodeURIComponent(r.game)}`;
+    case "community":
+      return r.tab === "league" ? "#/comunidad" : `#/comunidad/${COMMUNITY_SLUGS[r.tab]}`;
+    case "profile":
+      return r.username ? `#/perfil/${encodeURIComponent(r.username)}` : "#/perfil";
     case "progress":
       return "#/progreso";
     case "settings":
@@ -53,7 +68,8 @@ export function useRoute(): Route {
   return parseHash(hash);
 }
 
-const isTopLevel = (r: Route) => r.name === "library" || r.name === "train" || r.name === "progress" || r.name === "settings";
+const isTopLevel = (r: Route) =>
+  r.name === "library" || r.name === "train" || r.name === "community" || r.name === "progress" || r.name === "settings";
 
 /** Navega. Entre pestañas reemplaza el historial; hacia adentro lo apila. */
 export function navigate(r: Route, opts: { replace?: boolean } = {}): void {

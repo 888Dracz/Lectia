@@ -1,8 +1,9 @@
-import { BookA, Copy, NotebookPen, Share2, Trash } from "lucide-react";
+import { BookA, Copy, NotebookPen, Send, Share2, Trash } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Highlight, HighlightColor } from "../../store/state";
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
+import { openShare } from "../community/ShareSheet";
 import { Sheet } from "../components/Sheet";
 import type { SelectionInfo } from "./ReflowView";
 import { HIGHLIGHT_COLORS } from "./themes";
@@ -143,6 +144,16 @@ export function HighlightSheet({ highlight, bookTitle, onClose }: { highlight: H
             </button>
             <button className="btn btn-sm" onClick={() => void share(h.text, bookTitle)}>
               <Share2 size={16} /> Compartir
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                if (note !== h.note) update(h.id, { note: note.trim() });
+                onClose();
+                openShare({ kind: "quote", highlightId: h.id });
+              }}
+            >
+              <Send size={16} /> A mis amigos
             </button>
             <span className="spacer" />
             <button

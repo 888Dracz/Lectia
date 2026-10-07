@@ -13,6 +13,7 @@
     "preview": "vite preview --host",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:sql": "bash scripts/test-sql.sh",
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
@@ -22,6 +23,7 @@
     "@fontsource-variable/lora": "^5.3.0",
     "@fontsource/atkinson-hyperlegible": "^5.3.0",
     "@fontsource/merriweather": "^5.3.0",
+    "@supabase/supabase-js": "^2.117.2",
     "dompurify": "^3.4.16",
     "fflate": "^0.8.3",
     "idb": "^8.0.4",

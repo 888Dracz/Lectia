@@ -7,6 +7,7 @@ import {
   ImagePlus,
   Pencil,
   LibraryBig,
+  Send,
   Trash,
   Zap,
 } from "lucide-react";
@@ -20,6 +21,7 @@ import { formatBytes, formatDate, formatDuration, formatNumber } from "../../lib
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
 import { deliverFile } from "../../backup/backup";
+import { openShare } from "../community/ShareSheet";
 import { Cover, invalidateCover } from "../components/Cover";
 import { confirmDialog, promptDialog } from "../components/Dialog";
 import { Sheet } from "../components/Sheet";
@@ -165,6 +167,23 @@ export function BookActionsSheet({ bookId, onClose }: { bookId: string | null; o
                   <Zap size={18} />
                 </span>
                 <span className="li-main li-title">Lectura rápida con este libro</span>
+              </button>
+            )}
+            {!book.sample && (
+              <button
+                className="list-item"
+                onClick={() => {
+                  onClose();
+                  openShare({ kind: "book", bookId: book.id });
+                }}
+              >
+                <span className="li-icon" style={{ color: "var(--orange)", background: "rgba(255,159,67,.14)" }}>
+                  <Send size={18} />
+                </span>
+                <span className="li-main">
+                  <div className="li-title">Recomendar a mis amigos</div>
+                  <div className="li-sub">Compártelo en Novedades</div>
+                </span>
               </button>
             )}
             <button className="list-item" onClick={startEdit}>

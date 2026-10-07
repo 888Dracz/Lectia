@@ -1,5 +1,9 @@
 // Estado persistente de la app: biblioteca, notas, ajustes y progreso.
 import type { BookMeta } from "../books/types";
+import type { PostData, PostKind } from "../community/types";
+
+/** Máximo de protectores de racha guardados a la vez. */
+export const MAX_FREEZES = 2;
 
 export const STATE_VERSION = 1;
 
@@ -111,6 +115,39 @@ export interface Progress {
   totalRsvpWords: number;
   bestRsvpWpm: number;
   booksFinished: number;
+  /** Protectores de racha disponibles. */
+  freezes: number;
+  /** Días que salvó un protector (no suman a la racha, pero no la cortan). */
+  frozenDays: string[];
+  /** Último día en que se ganó un protector (para no darlo dos veces). */
+  freezeAwardDay?: string;
+}
+
+/** Preferencias de la comunidad y novedades pendientes de publicar. */
+export interface CommunitySettings {
+  /** Publicar en Novedades los libros que termino. */
+  autoShareBooks: boolean;
+  /** Publicar logros, rachas, niveles y ascensos de liga. */
+  autoShareMilestones: boolean;
+  /** Mostrar en el perfil el libro que estoy leyendo. */
+  showReadingNow: boolean;
+  /** Hasta cuándo se vieron las novedades de amigos (ISO). */
+  feedSeenAt?: string;
+  /** Semana de liga cuyo resultado ya se mostró. */
+  seenLeagueWeek?: string;
+  /** Novedades creadas sin conexión, pendientes de publicar. */
+  outbox: OutboxPost[];
+}
+
+export interface OutboxPost {
+  id: string;
+  kind: PostKind;
+  data: PostData;
+  createdAt: number;
+}
+
+export function defaultCommunity(): CommunitySettings {
+  return { autoShareBooks: true, autoShareMilestones: true, showReadingNow: true, outbox: [] };
 }
 
 export interface PersistedState {
@@ -122,6 +159,7 @@ export interface PersistedState {
   reader: ReaderSettings;
   app: AppSettings;
   progress: Progress;
+  community: CommunitySettings;
 }
 
 export const DEFAULT_READER: ReaderSettings = {
@@ -168,6 +206,8 @@ export const DEFAULT_PROGRESS: Progress = {
   totalRsvpWords: 0,
   bestRsvpWpm: 0,
   booksFinished: 0,
+  freezes: 1,
+  frozenDays: [],
 };
 
 export function emptyDay(): DayStats {
@@ -183,7 +223,8 @@ export function defaultState(): PersistedState {
     highlights: [],
     reader: { ...DEFAULT_READER },
     app: { ...DEFAULT_APP },
-    progress: { ...DEFAULT_PROGRESS, achievements: {}, days: {}, games: {}, wpmHistory: [] },
+    progress: { ...DEFAULT_PROGRESS, achievements: {}, days: {}, games: {}, wpmHistory: [], frozenDays: [] },
+    community: defaultCommunity(),
   };
 }
 
@@ -220,7 +261,14 @@ export function migrateState(raw: unknown): PersistedState {
       achievements: { ...(s.progress?.achievements ?? {}) },
       games: { ...(s.progress?.games ?? {}) },
       wpmHistory: Array.isArray(s.progress?.wpmHistory) ? s.progress!.wpmHistory : [],
+      frozenDays: Array.isArray(s.progress?.frozenDays) ? s.progress!.frozenDays.filter((k) => typeof k === "string") : [],
+      freezes: Math.max(0, Math.min(MAX_FREEZES, Number(s.progress?.freezes ?? DEFAULT_PROGRESS.freezes) || 0)),
       days,
+    },
+    community: {
+      ...defaultCommunity(),
+      ...(s.community ?? {}),
+      outbox: Array.isArray(s.community?.outbox) ? s.community!.outbox : [],
     },
   };
 }
