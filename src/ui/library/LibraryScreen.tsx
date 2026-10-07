@@ -8,11 +8,13 @@ import {
   LayoutList,
   Library,
   Ellipsis,
+  Pencil,
   Play,
   Plus,
   Search,
   ShieldCheck,
   Sparkles,
+  Trash,
   X,
 } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
@@ -25,7 +27,7 @@ import type { LibrarySort, LibraryView } from "../../store/state";
 import { useStore } from "../../store/store";
 import { Cover } from "../components/Cover";
 import { Bar, Ring } from "../components/controls";
-import { promptDialog } from "../components/Dialog";
+import { confirmDialog, promptDialog } from "../components/Dialog";
 import { Sheet } from "../components/Sheet";
 import { ReadingListStrip } from "../readinglist/ReadingListStrip";
 import { BookActionsSheet } from "./BookSheets";
@@ -65,6 +67,8 @@ export function LibraryScreen() {
   const progress = useStore((s) => s.progress);
   const setApp = useStore((s) => s.setApp);
   const createCollection = useStore((s) => s.createCollection);
+  const updateCollection = useStore((s) => s.updateCollection);
+  const deleteCollection = useStore((s) => s.deleteCollection);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -72,6 +76,7 @@ export function LibraryScreen() {
   const [sortOpen, setSortOpen] = useState(false);
   const [actionsFor, setActionsFor] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [shelfMenuFor, setShelfMenuFor] = useState<string | null>(null);
 
   const all = useMemo(() => Object.values(books), [books]);
   const current = useMemo(
@@ -120,6 +125,33 @@ export function LibraryScreen() {
   const newShelf = async () => {
     const name = await promptDialog("Nueva estantería", "", "Ej.: Novelas, Estudio, Poesía…", "Crear");
     if (name?.trim()) setFilter(createCollection(name.trim(), pickEmoji(name)));
+  };
+
+  const activeShelf = collections.find((c) => c.id === filter);
+  const menuShelf = collections.find((c) => c.id === shelfMenuFor);
+
+  const renameShelf = async (id: string) => {
+    const c = collections.find((x) => x.id === id);
+    if (!c) return;
+    setShelfMenuFor(null);
+    const name = await promptDialog("Renombrar estantería", c.name, "Nombre", "Guardar");
+    if (name?.trim() && name.trim() !== c.name) updateCollection(id, { name: name.trim() });
+  };
+
+  const removeShelf = async (id: string) => {
+    const c = collections.find((x) => x.id === id);
+    if (!c) return;
+    setShelfMenuFor(null);
+    const n = all.filter((b) => b.collections.includes(id)).length;
+    const ok = await confirmDialog(
+      `¿Borrar “${c.name}”?`,
+      n > 0 ? `Tus ${n} ${n === 1 ? "libro no se borrará" : "libros no se borrarán"}; solo se quitarán de esta estantería.` : undefined,
+      "Borrar",
+      true
+    );
+    if (!ok) return;
+    if (filter === id) setFilter("all");
+    deleteCollection(id);
   };
 
   return (
@@ -229,10 +261,11 @@ export function LibraryScreen() {
             <FilterChip active={filter === "finished"} onClick={() => setFilter("finished")} label="Terminados" count={counts.finished} />
             <FilterChip active={filter === "fav"} onClick={() => setFilter("fav")} label={<><Heart size={14} /> Favoritos</>} count={counts.fav} />
             {collections.map((c) => (
-              <FilterChip
+              <ShelfChip
                 key={c.id}
                 active={filter === c.id}
                 onClick={() => setFilter(c.id)}
+                onLong={() => setShelfMenuFor(c.id)}
                 label={`${c.emoji} ${c.name}`}
                 count={all.filter((b) => b.collections.includes(c.id)).length}
               />
@@ -247,6 +280,11 @@ export function LibraryScreen() {
               {visible.length} {visible.length === 1 ? "libro" : "libros"}
             </span>
             <span className="spacer" />
+            {activeShelf && (
+              <button className="btn btn-ghost btn-sm" aria-label={`Opciones de ${activeShelf.name}`} onClick={() => setShelfMenuFor(activeShelf.id)}>
+                <Ellipsis size={19} />
+              </button>
+            )}
             <button className="btn btn-ghost btn-sm" onClick={() => setSortOpen(true)}>
               <ArrowDownUp size={16} /> {SORT_LABEL[app.librarySort].split(" ")[0]}
             </button>
@@ -301,6 +339,28 @@ export function LibraryScreen() {
         </div>
       </Sheet>
 
+      <Sheet open={!!menuShelf} onClose={() => setShelfMenuFor(null)} title={menuShelf ? `${menuShelf.emoji} ${menuShelf.name}` : ""}>
+        {menuShelf && (
+          <div className="list">
+            <button className="list-item" onClick={() => void renameShelf(menuShelf.id)}>
+              <span className="li-icon">
+                <Pencil size={18} />
+              </span>
+              <span className="li-main li-title">Renombrar estantería</span>
+            </button>
+            <button className="list-item" onClick={() => void removeShelf(menuShelf.id)}>
+              <span className="li-icon" style={{ color: "var(--red)", background: "rgba(255,107,107,.14)" }}>
+                <Trash size={18} />
+              </span>
+              <span className="li-main">
+                <div className="li-title" style={{ color: "var(--red)" }}>Borrar estantería</div>
+                <div className="li-sub">Los libros se quedan en tu biblioteca</div>
+              </span>
+            </button>
+          </div>
+        )}
+      </Sheet>
+
       <BookActionsSheet bookId={actionsFor} onClose={() => setActionsFor(null)} />
     </div>
   );
@@ -331,6 +391,17 @@ function pickEmoji(name: string): string {
 function FilterChip({ active, onClick, label, count }: { active: boolean; onClick: () => void; label: ReactNode; count: number }) {
   return (
     <button className={`chip ${active ? "active" : ""}`} onClick={onClick}>
+      {label}
+      <span className="count">{count}</span>
+    </button>
+  );
+}
+
+/** Chip de estantería: toque para filtrar, pulsación larga (o clic derecho) para renombrar o borrar. */
+function ShelfChip({ active, onClick, onLong, label, count }: { active: boolean; onClick: () => void; onLong: () => void; label: string; count: number }) {
+  const press = useLongPress(onLong, onClick);
+  return (
+    <button className={`chip ${active ? "active" : ""}`} {...press}>
       {label}
       <span className="count">{count}</span>
     </button>
