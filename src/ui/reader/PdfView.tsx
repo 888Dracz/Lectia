@@ -1,10 +1,13 @@
 // Vista de PDF con las páginas originales: desplazamiento vertical continuo,
 // dibujado a pedido (solo las páginas cercanas), zoom con pellizco y filtros
 // de color para leer de noche.
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
 import type { PdfContent } from "../../books/types";
 import { clamp } from "../../lib/util";
-import type { ReaderSettings } from "../../store/state";
+import { bbox, intersects, padBox, strokeHit, transformPoints, unionBox, type Box } from "../../notes/ink";
+import { canvasToBlob, rasterizePdf } from "../../notes/raster";
+import type { Drawing, ReaderSettings } from "../../store/state";
+import { captureScale, inkPathHtml, toPaint, type CachedStroke, type InkSurface } from "./inkSurface";
 import type { GoTarget, ViewHandle, ViewLocation } from "./ReflowView";
 
 interface Props {
@@ -12,6 +15,10 @@ interface Props {
   settings: ReaderSettings;
   initial: { chapter: number; fraction: number };
   pdfFilter: string;
+  /** Trazos a mano sobre las páginas originales. */
+  drawings: Drawing[];
+  /** Mientras se dibuja o recorta, los toques no pasan página ni hacen zoom. */
+  locked: boolean;
   menuOpen: boolean;
   onLocation: (l: ViewLocation) => void;
   onCenterTap: () => void;
@@ -22,6 +29,26 @@ interface Props {
 
 const GAP = 10;
 const MAX_RENDERED = 7;
+
+/** Texto de un PDF dentro de una zona de la página (en fracciones del ancho). */
+async function pdfRegionText(content: PdfContent, page: number, box: Box): Promise<string> {
+  try {
+    const pg = await content.doc.getPage(page + 1);
+    const vp = pg.getViewport({ scale: 1 });
+    const tc = await pg.getTextContent();
+    const words: string[] = [];
+    for (const item of tc.items as { str?: string; transform?: number[] }[]) {
+      if (!item.str?.trim() || !item.transform) continue;
+      const [x, y] = vp.convertToViewportPoint(item.transform[4], item.transform[5]);
+      const nx = x / vp.width;
+      const ny = y / vp.width;
+      if (nx >= box.x - 0.02 && nx <= box.x + box.w && ny >= box.y && ny <= box.y + box.h + 0.02) words.push(item.str.trim());
+    }
+    return words.join(" ").replace(/\s+/g, " ").trim();
+  } catch {
+    return "";
+  }
+}
 
 export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref) {
   const { content, settings } = props;
@@ -48,6 +75,10 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref
   }
   const state = useRef({ page: props.initial.chapter, restored: false, lastReported: -1 });
   const rendered = useRef(new Map<number, { canvas: HTMLCanvasElement; scale: number; task?: { cancel(): void } }>());
+  const inkSavedRef = useRef<SVGGElement>(null);
+  const inkLiveRef = useRef<SVGGElement>(null);
+  const inkCache = useRef(new Map<string, CachedStroke>());
+  const holderAt = (i: number) => pagesRef.current?.children[i] as HTMLElement | undefined;
   const visible = useRef(new Set<number>());
 
   // Tamaño real de la primera página (las demás se ajustan al dibujarse).
@@ -227,7 +258,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref
       },
       { root, rootMargin: "120% 0px" }
     );
-    Array.from(holder.children).forEach((c) => io.observe(c));
+    holder.querySelectorAll(".pdf-page").forEach((c) => io.observe(c));
     return () => io.disconnect();
   }, [width, n, scheduleRender]);
 
@@ -238,6 +269,134 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref
     },
     []
   );
+
+  // --- Escritura a mano ---------------------------------------------------------
+  const paintInk = () => {
+    const g = inkSavedRef.current;
+    const cache = inkCache.current;
+    cache.clear();
+    if (!g) return;
+    let html = "";
+    for (const d of p.current.drawings) {
+      if (d.view !== "page" || d.discardedAt) continue;
+      const holder = holderAt(d.chapter);
+      if (!holder) continue;
+      const pw = holder.clientWidth;
+      for (const k of d.strokes) {
+        const pts = transformPoints(k.points, holder.offsetLeft, holder.offsetTop, pw);
+        const width = k.width * pw;
+        const entry: CachedStroke = {
+          drawingId: d.id,
+          pts,
+          width,
+          box: padBox(bbox(pts), width / 2),
+          tool: k.tool,
+          color: k.color,
+          straight: k.shape === "rect" || k.shape === "line",
+        };
+        cache.set(k.id, entry);
+        html += inkPathHtml(entry);
+      }
+    }
+    g.innerHTML = html;
+  };
+  const inkKey = props.drawings
+    .filter((d) => d.view === "page")
+    .map((d) => `${d.id}:${d.updatedAt}:${d.discardedAt ?? 0}:${d.strokes.length}`)
+    .join("|");
+  const layoutKey = heights.join(",");
+  useLayoutEffect(() => {
+    paintInk();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inkKey, layoutKey]);
+
+  const pageAtY = (y: number): number => {
+    let lo = 0;
+    let hi = n - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if ((holderAt(mid)?.offsetTop ?? 0) <= y) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
+  };
+
+  const holderBox = (i: number): Box => {
+    const h = holderAt(i);
+    return h ? { x: h.offsetLeft, y: h.offsetTop, w: h.clientWidth, h: h.clientHeight } : { x: 0, y: 0, w: 1, h: 1 };
+  };
+
+  const surface = (): InkSurface | null => {
+    const pages = pagesRef.current;
+    const scroller = scrollRef.current;
+    const live = inkLiveRef.current;
+    if (!pages || !scroller || !live || !width) return null;
+    const origin = () => pages.getBoundingClientRect();
+    const visibleBox = (): Box => {
+      const o = origin();
+      const v = scroller.getBoundingClientRect();
+      return { x: v.left - o.left, y: v.top - o.top, w: v.width, h: v.height };
+    };
+    const strokesIn = (region: Box) => [...inkCache.current.values()].filter((k) => intersects(k.box, region));
+    return {
+      view: "page",
+      toLocal: (x, y) => {
+        const o = origin();
+        return { x: x - o.left, y: y - o.top };
+      },
+      liveLayer: () => live,
+      // Un "em" de tinta equivale más o menos a la letra de un libro en la página.
+      emPx: () => holderBox(state.current.page).w / 28,
+      anchor: (points, widthPx, center) => {
+        const o = origin();
+        const page = pageAtY(center.y - o.top);
+        const b = holderBox(page);
+        return {
+          chapter: page,
+          anchor: { kind: "page" },
+          points: points.map((v, i) => Math.round(((v - (i % 2 ? b.y : b.x)) / b.w) * 10000) / 10000),
+          width: widthPx / b.w,
+        };
+      },
+      pageKey: (pt) => String(pageAtY(pt.y)),
+      hitStroke: (pt, radius) => {
+        for (const [id, k] of inkCache.current) {
+          if (!intersects(k.box, { x: pt.x - radius, y: pt.y - radius, w: radius * 2, h: radius * 2 })) continue;
+          if (strokeHit(k.pts, pt.x, pt.y, radius + k.width / 2)) return { drawingId: k.drawingId, strokeId: id };
+        }
+        return null;
+      },
+      drawingsInView: () => [...new Set(strokesIn(visibleBox()).map((k) => k.drawingId))],
+      drawingBox: (id) => {
+        let box: Box | null = null;
+        for (const k of inkCache.current.values()) if (k.drawingId === id) box = unionBox(box, k.box);
+        return box;
+      },
+      pageBox: (pt) => holderBox(pageAtY(pt.y)),
+      visibleBox,
+      capture: async (region, textRegion) => {
+        const canvas = rasterizePdf({
+          pages,
+          origin: origin(),
+          region,
+          background: getComputedStyle(scroller).backgroundColor || "#ddd",
+          scale: captureScale(),
+          ink: strokesIn(region).map(toPaint),
+        });
+        const blob = await canvasToBlob(canvas);
+        const tr = textRegion ?? region;
+        const page = pageAtY(tr.y + Math.min(tr.h / 2, 20));
+        const b = holderBox(page);
+        const text = await pdfRegionText(content, page, { x: (tr.x - b.x) / b.w, y: (tr.y - b.y) / b.w, w: tr.w / b.w, h: tr.h / b.w });
+        return { blob, text, width: Math.round(region.w), height: Math.round(region.h) };
+      },
+      locate: (region) => {
+        const page = pageAtY(region.y + Math.min(region.h / 2, 20));
+        const b = holderBox(page);
+        return { chapter: page, fraction: clamp((region.y - b.y) / Math.max(1, b.h), 0, 0.99) };
+      },
+    };
+  };
 
   // --- Navegación ---------------------------------------------------------------
   const next = useCallback(() => {
@@ -267,8 +426,10 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref
       visibleOffset: () => null,
       blocksFromVisible: () => [],
       showElement: () => undefined,
+      ink: surface,
     }),
-    [next, prev, scrollToPage, n]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [next, prev, scrollToPage, n, width]
   );
 
   // --- Gestos: toques y pellizco ------------------------------------------------
@@ -277,6 +438,7 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref
   const tap = useRef<{ x: number; y: number; t: number } | null>(null);
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (p.current.locked) return;
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 1) tap.current = { x: e.clientX, y: e.clientY, t: performance.now() };
     if (pointers.current.size === 2) {
@@ -349,6 +511,10 @@ export const PdfView = forwardRef<ViewHandle, Props>(function PdfView(props, ref
             <span className="pdf-num">{i + 1}</span>
           </div>
         ))}
+        <svg className="ink-layer" aria-hidden="true">
+          <g ref={inkSavedRef} />
+          <g ref={inkLiveRef} />
+        </svg>
       </div>
     </div>
   );
