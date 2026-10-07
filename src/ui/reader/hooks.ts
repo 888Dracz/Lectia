@@ -10,10 +10,12 @@ const IDLE_LIMIT = 3 * 60000;
  * Cuenta el tiempo de lectura activa (pantalla visible y con actividad
  * reciente o con lectura en voz alta) y lo registra en las estadísticas.
  */
-export function useReadingSession(bookId: string | undefined, activeExternally: () => boolean) {
+export function useReadingSession(bookId: string | undefined, activeExternally: () => boolean, percent: () => number | undefined = () => undefined) {
   const acc = useRef({ ms: 0, pages: 0, sessionMs: 0, lastActivity: Date.now() });
   const ext = useRef(activeExternally);
   ext.current = activeExternally;
+  const pct = useRef(percent);
+  pct.current = percent;
 
   useEffect(() => {
     if (!bookId) return;
@@ -24,7 +26,7 @@ export function useReadingSession(bookId: string | undefined, activeExternally: 
     };
     const flush = () => {
       if (a.ms > 0 || a.pages > 0) {
-        useStore.getState().logReading(bookId, a.ms, a.pages);
+        useStore.getState().logReading(bookId, a.ms, a.pages, pct.current());
         a.ms = 0;
         a.pages = 0;
       }
@@ -57,6 +59,8 @@ export function useReadingSession(bookId: string | undefined, activeExternally: 
   }, [bookId]);
 
   return {
+    /** Tiempo leído en esta sesión (ms), para el recordatorio de descanso. */
+    sessionMs: () => acc.current.sessionMs,
     pageTurned: () => {
       acc.current.pages++;
       acc.current.lastActivity = Date.now();
@@ -133,4 +137,110 @@ export function useClockBattery(): { time: string; battery: number | null } {
     };
   }, []);
   return ref.current;
+}
+
+/** Pasa página inclinando el teléfono hacia un lado y volviendo al centro. */
+export function useTiltPaging(enabled: boolean, threshold: number, onNext: () => void, onPrev: () => void) {
+  const cb = useRef({ onNext, onPrev });
+  cb.current = { onNext, onPrev };
+  useEffect(() => {
+    if (!enabled || typeof DeviceOrientationEvent === "undefined") return;
+    let armed = true;
+    let base: number | null = null;
+    let last = 0;
+    const onTilt = (e: DeviceOrientationEvent) => {
+      const landscape = Math.abs((screen.orientation?.angle ?? 0) % 180) === 90;
+      const v = landscape ? e.beta : e.gamma;
+      if (v === null || v === undefined) return;
+      if (base === null) base = v;
+      const d = v - base;
+      if (armed && Math.abs(d) > threshold && Date.now() - last > 700) {
+        armed = false;
+        last = Date.now();
+        if (d > 0) cb.current.onNext();
+        else cb.current.onPrev();
+      } else if (Math.abs(d) < threshold * 0.4) armed = true;
+      // La posición "neutra" se adapta despacio a cómo se sostiene el teléfono.
+      if (armed) base = base * 0.98 + v * 0.02;
+    };
+    window.addEventListener("deviceorientation", onTilt);
+    return () => window.removeEventListener("deviceorientation", onTilt);
+  }, [enabled, threshold]);
+}
+
+/** iPhone pide permiso para leer los sensores de movimiento. */
+export async function requestMotionPermission(): Promise<boolean> {
+  const D = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+  if (typeof D?.requestPermission !== "function") return typeof DeviceOrientationEvent !== "undefined";
+  try {
+    return (await D.requestPermission()) === "granted";
+  } catch {
+    return false;
+  }
+}
+
+let audioCtx: AudioContext | null = null;
+
+/** Sonido corto de hoja de papel (ruido filtrado), sin archivos de audio. */
+export function playPageSound(volume: number): void {
+  try {
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    audioCtx ??= new Ctx();
+    const ctx = audioCtx;
+    if (ctx.state === "suspended") void ctx.resume();
+    const dur = 0.22;
+    const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * dur), ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) {
+      const t = i / data.length;
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 2.2) * Math.min(1, t * 18);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 2400;
+    filter.Q.value = 0.7;
+    const gain = ctx.createGain();
+    gain.gain.value = Math.max(0, Math.min(1, volume)) * 0.6;
+    src.connect(filter).connect(gain).connect(ctx.destination);
+    src.start();
+  } catch {
+    /* sin audio */
+  }
+}
+
+/** Avisos de salud visual: descanso tras N minutos y alertas a horas fijas. */
+export function useHealthAlerts(breakMin: number, times: string[], sessionMs: () => number, onAlert: (title: string, text: string) => void) {
+  const cb = useRef({ sessionMs, onAlert });
+  cb.current = { sessionMs, onAlert };
+  useEffect(() => {
+    let nextBreak = breakMin > 0 ? breakMin * 60000 : Infinity;
+    const fired = new Set<string>();
+    const t = setInterval(() => {
+      const ms = cb.current.sessionMs();
+      if (ms >= nextBreak) {
+        nextBreak = ms + breakMin * 60000;
+        cb.current.onAlert("Hora de descansar la vista", `Llevas ${Math.round(ms / 60000)} minutos leyendo. Mira algo lejano durante 20 segundos.`);
+      }
+      const now = new Date();
+      const hm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+      const key = `${now.toDateString()} ${hm}`;
+      if (times.includes(hm) && !fired.has(key)) {
+        fired.add(key);
+        cb.current.onAlert("Alerta de lectura", `Son las ${hm}.`);
+      }
+    }, 15000);
+    return () => clearInterval(t);
+  }, [breakMin, times.join(",")]);
+}
+
+/** Muestra una notificación del sistema si hay permiso (si no, solo el aviso en pantalla). */
+export function systemNotify(title: string, body: string): void {
+  try {
+    if ("Notification" in window && Notification.permission === "granted") new Notification(title, { body, icon: `${import.meta.env.BASE_URL}icon-192.png` });
+  } catch {
+    /* algunos navegadores solo permiten notificar desde el service worker */
+  }
 }

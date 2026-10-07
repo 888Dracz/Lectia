@@ -1,7 +1,7 @@
 // Modelo de datos de los libros y de su contenido ya interpretado.
 import type { PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-export type BookFormat = "epub" | "pdf" | "docx" | "txt" | "md" | "html" | "fb2" | "cbz";
+export type BookFormat = "epub" | "pdf" | "docx" | "txt" | "md" | "html" | "fb2" | "cbz" | "mobi";
 
 export const FORMAT_LABEL: Record<BookFormat, string> = {
   epub: "EPUB",
@@ -12,6 +12,7 @@ export const FORMAT_LABEL: Record<BookFormat, string> = {
   html: "HTML",
   fb2: "FB2",
   cbz: "Cómic",
+  mobi: "Kindle",
 };
 
 /**
@@ -49,6 +50,9 @@ export interface BookMeta {
   location?: ReadingLocation;
   readingMs: number;
   wordCount?: number;
+  charCount?: number;
+  /** Historial de lectura por día (clave AAAA-MM-DD). */
+  history?: Record<string, { ms: number; from: number; to: number }>;
   chapterCount?: number;
   description?: string;
   language?: string;

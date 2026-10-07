@@ -3,18 +3,29 @@ import {
   Bookmark,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  FileCode,
   Headphones,
+  Info,
   ListTree,
   Moon,
   Pause,
   Play,
+  ScreenShare,
   Search,
   Square,
   Sun,
+  TextCursorInput,
   Type,
+  ALargeSmall,
+  ArrowDownWideNarrow,
+  SkipBack,
+  SkipForward,
   Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { setEngineOptions, engineKey } from "../../books/html";
 import { openBookContent } from "../../books/load";
 import {
   chapterSizes,
@@ -24,9 +35,10 @@ import {
   type BookMeta,
   type ReflowContent,
 } from "../../books/types";
-import { goBack } from "../../lib/router";
+import { goBack, navigate } from "../../lib/router";
+import { formatMinutes, minutesFor, readingWpm, remainingWords } from "../../lib/stats";
 import { clamp, debounce, formatNumber, safeStorage } from "../../lib/util";
-import type { Highlight, ReaderSettings } from "../../store/state";
+import type { Highlight, ReaderSettings, ToolId } from "../../store/state";
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
 import { confirmDialog } from "../components/Dialog";
@@ -34,9 +46,19 @@ import { Sheet } from "../components/Sheet";
 import { Range } from "../components/controls";
 import { HighlightSheet, SelectionMenu } from "./Annotations";
 import { FormatSheet } from "./FormatSheet";
-import { useClockBattery, useReadingSession, useThemeColor, useWakeLock } from "./hooks";
+import {
+  playPageSound,
+  systemNotify,
+  useClockBattery,
+  useHealthAlerts,
+  useReadingSession,
+  useThemeColor,
+  useTiltPaging,
+  useWakeLock,
+} from "./hooks";
+import { BlueLightFilter, BookInfoSheet, EditViewSheet, FootnoteSheet, QuickAdjustSheet, ReadingRuler } from "./ReaderExtras";
 import { PdfView } from "./PdfView";
-import { ReflowView, type SelectionInfo, type ViewHandle, type ViewLocation } from "./ReflowView";
+import { ReflowView, type FootnoteInfo, type SelectionInfo, type ViewHandle, type ViewLocation } from "./ReflowView";
 import { RsvpPlayer, type RsvpBlock, type RsvpResult } from "./RsvpPlayer";
 import { SearchSheet } from "./SearchSheet";
 import { readerFont, readerTheme } from "./themes";
@@ -44,11 +66,14 @@ import { TocSheet } from "./TocSheet";
 import { listVoices, TtsController, ttsSupported } from "./tts";
 import { Cover } from "../components/Cover";
 
-type SheetName = null | "toc" | "format" | "search" | "end" | "tts";
+type SheetName = null | "toc" | "format" | "search" | "end" | "tts" | "info" | "edit" | "brightness" | "fontSize";
 
 export function ReaderScreen({ bookId }: { bookId: string }) {
   const book = useStore((s) => s.books[bookId]);
   const hydrated = useStore((s) => s.hydrated);
+  const r = useStore((s) => s.reader);
+  const engine = { bookStyles: r.bookStyles, publisherFonts: r.publisherFonts, cleanEmptyLines: r.cleanEmptyLines, cleanSpaces: r.cleanSpaces };
+  const eKey = engineKey(engine);
   const [content, setContent] = useState<BookContent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,6 +82,7 @@ export function ReaderScreen({ bookId }: { bookId: string }) {
     let alive = true;
     setContent(null);
     setError(null);
+    setEngineOptions(engine);
     openBookContent(book)
       .then((c) => alive && setContent(c))
       .catch((e) => alive && setError(e instanceof Error ? e.message : "No se pudo abrir el libro"));
@@ -65,7 +91,7 @@ export function ReaderScreen({ bookId }: { bookId: string }) {
     };
     // Solo al cambiar de libro (no en cada actualización de sus datos).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.id]);
+  }, [book?.id, eKey]);
 
   if (!hydrated) return null;
   if (!book) {
@@ -115,10 +141,19 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
   const allBookmarks = useStore((s) => s.bookmarks);
   const highlights = useMemo(() => allHighlights.filter((h) => h.bookId === book.id), [allHighlights, book.id]);
 
-  const theme = readerTheme(settings.theme);
+  const theme = readerTheme(settings.theme, settings.customTheme);
   const font = readerFont(settings.font);
   const pdfPages = content.kind === "pdf" && (book.pdfMode ?? "pages") === "pages";
-  const flow: ReflowContent | null = content.kind === "pdf" ? (pdfPages ? null : content.asReflow()) : content;
+  const baseFlow: ReflowContent | null = useMemo(
+    () => (content.kind === "pdf" ? (pdfPages ? null : content.asReflow()) : content),
+    [content, pdfPages]
+  );
+  // Vista de edición: capítulos retocados en esta sesión.
+  const [overrides, setOverrides] = useState<Map<number, string>>(() => new Map());
+  const flow: ReflowContent | null = useMemo(() => {
+    if (!baseFlow || !overrides.size) return baseFlow;
+    return { ...baseFlow, getHtml: (i: number) => (overrides.has(i) ? Promise.resolve(overrides.get(i)!) : baseFlow.getHtml(i)) };
+  }, [baseFlow, overrides]);
   const sizes = useMemo(() => chapterSizes(content), [content]);
   const totalChapters = sizes.length;
 
@@ -137,19 +172,44 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
   const [scrub, setScrub] = useState<number | null>(null);
   const [brightHint, setBrightHint] = useState(false);
   const [ttsState, setTtsState] = useState<{ active: boolean; playing: boolean }>({ active: false, playing: false });
+  const [footnote, setFootnote] = useState<FootnoteInfo | null>(null);
+  const [selectMode, setSelectMode] = useState(false);
+  const [autoScroll, setAutoScroll] = useState(false);
   const clock = useClockBattery();
+  const percentRef = useRef(book.location?.percent ?? 0);
 
   useWakeLock(settings.keepAwake);
   useThemeColor(theme.chrome);
-  const session = useReadingSession(book.id, () => ttsState.playing);
+  const session = useReadingSession(book.id, () => ttsState.playing || autoScroll, () => percentRef.current);
 
-  // Al salir de la pantalla completa (si se había activado).
+  useHealthAlerts(settings.breakReminderMin, settings.scheduledAlerts, session.sessionMs, (title, text) => {
+    toast(`${title}. ${text}`, { icon: "👁️" }, 8000);
+    systemNotify(title, text);
+  });
+
+  // Ocultar la barra de notificaciones (pantalla completa), también al cambiar el ajuste.
+  useEffect(() => {
+    if (settings.fullscreen && !document.fullscreenElement) void document.documentElement.requestFullscreen?.({ navigationUI: "hide" }).catch(() => undefined);
+    else if (!settings.fullscreen && document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }, [settings.fullscreen]);
   useEffect(
     () => () => {
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+      try {
+        screen.orientation?.unlock?.();
+      } catch {
+        /* sin bloqueo */
+      }
     },
     []
   );
+
+  const pageTurned = useCallback(() => {
+    session.pageTurned();
+    if (settings.pageSound) playPageSound(settings.pageSoundVolume);
+  }, [session, settings.pageSound, settings.pageSoundVolume]);
+
+  useTiltPaging(settings.tiltPaging && !sheet, settings.tiltThreshold, () => viewRef.current?.next(), () => viewRef.current?.prev());
 
   const initial = useMemo(
     () => ({ chapter: clamp(book.location?.chapter ?? 0, 0, Math.max(0, totalChapters - 1)), fraction: book.location?.fraction ?? 0 }),
@@ -163,6 +223,8 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
     [book.id, setLocation]
   );
   useEffect(() => () => saveLocation.flush(), [saveLocation]);
+  const saveDayPercent = useMemo(() => debounce((pct: number) => useStore.getState().notePercent(book.id, pct), 1500), [book.id]);
+  useEffect(() => () => saveDayPercent.flush(), [saveDayPercent]);
 
   const percent = loc ? globalPercent(content, loc.chapter, content.kind === "pdf" && pdfPages ? loc.fraction : loc.displayFraction) : book.location?.percent ?? 0;
 
@@ -170,9 +232,11 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
     (l: ViewLocation) => {
       setLoc(l);
       const pct = globalPercent(content, l.chapter, content.kind === "pdf" && pdfPages ? l.fraction : l.displayFraction);
+      percentRef.current = pct;
       saveLocation(l, pct);
+      saveDayPercent(pct);
     },
-    [content, pdfPages, saveLocation]
+    [content, pdfPages, saveLocation, saveDayPercent]
   );
 
   // --- Marcadores ---------------------------------------------------------------
@@ -376,6 +440,44 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
     updateBook(book.id, { pdfMode: mode });
   };
 
+  // --- Archivo anterior / siguiente (orden alfabético de la biblioteca) ---
+  const goFile = (dir: 1 | -1) => {
+    const list = Object.values(useStore.getState().books).sort((a, b) => a.title.localeCompare(b.title, "es"));
+    const i = list.findIndex((b) => b.id === book.id);
+    const other = list[i + dir];
+    if (!other) {
+      toast(dir > 0 ? "Es el último libro de tu biblioteca" : "Es el primer libro de tu biblioteca");
+      return;
+    }
+    saveLocation.flush();
+    navigate({ name: "reader", bookId: other.id }, { replace: true });
+  };
+
+  const toggleOrientation = async () => {
+    const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    const next = o?.type?.startsWith("portrait") ? "landscape" : "portrait";
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.().catch(() => undefined);
+      await o.lock?.(next);
+      toast(next === "landscape" ? "Pantalla en horizontal" : "Pantalla en vertical");
+    } catch {
+      toast("Este navegador no permite girar la pantalla desde la app: usa el giro automático del teléfono.", {}, 4500);
+    }
+  };
+
+  // --- Tiempo restante ---------------------------------------------------------
+  const timeLeft = useMemo(() => {
+    if (settings.timeLeft === "off" || !loc || !book.wordCount) return "";
+    const { wpm } = readingWpm(book);
+    const frac = content.kind === "pdf" && pdfPages ? 1 : loc.displayFraction;
+    const left = remainingWords(book.wordCount, sizes, loc.chapter, frac, percent);
+    const ch = formatMinutes(minutesFor(left.chapter, wpm));
+    const bk = formatMinutes(minutesFor(left.book, wpm));
+    if (settings.timeLeft === "chapter") return `${ch} en el capítulo`;
+    if (settings.timeLeft === "book") return `${bk} en el libro`;
+    return `Cap. ${ch} · Libro ${bk}`;
+  }, [settings.timeLeft, loc, book, content.kind, pdfPages, sizes, percent]);
+
   const cssVars = {
     ["--rd-bg" as string]: theme.bg,
     ["--rd-fg" as string]: theme.fg,
@@ -390,13 +492,18 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
     ["--rd-hyphens" as string]: settings.hyphenate ? "auto" : "manual",
   };
 
+  const printed = settings.printedPages && loc?.printedPage ? `Pág. impresa ${loc.printedPage}` : "";
+  const percentText = `${(percent * 100).toFixed(percent < 0.1 ? 1 : 0)}%`;
+
   const pageLabel = loc
     ? content.kind === "pdf" && pdfPages
       ? `Pág. ${loc.chapter + 1} de ${content.numPages}`
-      : settings.mode === "paged" || flow?.fixedLayout
+      : settings.mode === "paged" || !settings.allowScroll || flow?.fixedLayout
         ? `${loc.page + 1} / ${loc.pages}`
         : ""
     : "";
+  const progressText =
+    settings.progressDisplay === "percent" ? percentText : settings.progressDisplay === "page" ? pageLabel || percentText : [pageLabel, percentText].filter(Boolean).join(" · ");
 
   const scrubValue = scrub ?? (content.kind === "pdf" && pdfPages ? loc?.chapter ?? 0 : percent);
   const scrubLabel =
@@ -404,9 +511,79 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
       ? `Página ${Math.round(scrubValue) + 1}`
       : `${chapterTitle(locationFromPercent(sizes, scrubValue).chapter)} · ${Math.round(scrubValue * 100)}%`;
 
+  function tool(id: ToolId): { icon: React.ReactNode; label: string; run: () => void; disabled?: boolean; active?: boolean } {
+    const go = (f: () => void) => () => {
+      setMenu(false);
+      f();
+    };
+    switch (id) {
+      case "toc":
+        return { icon: <ListTree size={22} />, label: "Índice", run: () => setSheet("toc") };
+      case "format":
+        return { icon: <Type size={22} />, label: "Aspecto", run: () => setSheet("format") };
+      case "night":
+        return { icon: theme.dark ? <Sun size={22} /> : <Moon size={22} />, label: theme.dark ? "Día" : "Noche", run: toggleNight };
+      case "tts":
+        return { icon: <Headphones size={22} />, label: "Escuchar", run: () => (ttsState.active ? setSheet("tts") : startTts()) };
+      case "rsvp":
+        return { icon: <Zap size={22} />, label: "Rápida", run: () => void openRsvp(), disabled: !!flow?.fixedLayout };
+      case "select":
+        return {
+          icon: <TextCursorInput size={22} />,
+          label: "Seleccionar",
+          active: selectMode,
+          disabled: pdfPages,
+          run: go(() => {
+            setSelectMode((v) => !v);
+            toast(selectMode ? "Selección desactivada" : "Arrastra el dedo sobre el texto para seleccionarlo");
+          }),
+        };
+      case "search":
+        return { icon: <Search size={22} />, label: "Buscar", run: () => setSheet("search") };
+      case "autoscroll":
+        return {
+          icon: <ArrowDownWideNarrow size={22} />,
+          label: "Auto",
+          active: autoScroll,
+          run: go(() => {
+            setAutoScroll((v) => !v);
+            if (!autoScroll) toast("Desplazamiento automático · toca el centro para pausar");
+          }),
+        };
+      case "prevChapter":
+        return { icon: <ChevronsLeft size={22} />, label: "Cap. ant.", disabled: !loc || loc.chapter === 0, run: () => loc && viewRef.current?.goTo({ chapter: loc.chapter - 1, fraction: 0 }) };
+      case "nextChapter":
+        return {
+          icon: <ChevronsRight size={22} />,
+          label: "Cap. sig.",
+          disabled: !loc || loc.chapter >= totalChapters - 1,
+          run: () => loc && viewRef.current?.goTo({ chapter: loc.chapter + 1, fraction: 0 }),
+        };
+      case "prevFile":
+        return { icon: <SkipBack size={22} />, label: "Libro ant.", run: () => goFile(-1) };
+      case "nextFile":
+        return { icon: <SkipForward size={22} />, label: "Libro sig.", run: () => goFile(1) };
+      case "bookmark":
+        return { icon: <Bookmark size={22} fill={pageBookmark ? "currentColor" : "none"} />, label: "Marcador", active: !!pageBookmark, run: toggleBookmark };
+      case "brightness":
+        return { icon: <Sun size={22} />, label: "Brillo", run: () => setSheet("brightness") };
+      case "fontSize":
+        return { icon: <ALargeSmall size={22} />, label: "Letra", run: () => setSheet("fontSize"), disabled: pdfPages || !!flow?.fixedLayout };
+      case "orientation":
+        return { icon: <ScreenShare size={22} />, label: "Girar", run: () => void toggleOrientation() };
+      case "info":
+        return { icon: <Info size={22} />, label: "Info", run: () => setSheet("info") };
+      case "edit":
+        return { icon: <FileCode size={22} />, label: "Edición", run: () => setSheet("edit"), disabled: !flow || !!flow.fixedLayout };
+    }
+  }
+
   return (
-    <div className={`reader ${theme.dark ? "dark" : "light"} ${settings.showStatus ? "with-status" : ""}`} style={cssVars}>
-      {settings.showStatus && (
+    <div
+      className={`reader ${theme.dark ? "dark" : "light"} ${settings.showStatus ? (settings.miniStatus ? "with-mini-status" : "with-status") : ""}`}
+      style={cssVars}
+    >
+      {settings.showStatus && !settings.miniStatus && (
         <div className="rd-status top">
           <span className="ellipsis">{loc ? chapterTitle(loc.chapter) : book.title}</span>
         </div>
@@ -423,7 +600,7 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
           menuOpen={menu}
           onLocation={onLocation}
           onCenterTap={() => setMenu((m) => !m)}
-          onPageTurn={session.pageTurned}
+          onPageTurn={pageTurned}
           onReachEnd={onReachEnd}
           onZoom={(z) => setReader({ pdfZoom: z })}
         />
@@ -439,9 +616,14 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
           onLocation={onLocation}
           onCenterTap={() => {
             setSelection(null);
+            if (autoScroll) {
+              setAutoScroll(false);
+              toast("Desplazamiento automático en pausa");
+              return;
+            }
             setMenu((m) => !m);
           }}
-          onPageTurn={session.pageTurned}
+          onPageTurn={pageTurned}
           onReachEnd={onReachEnd}
           onHighlightTap={(id) => setEditing(highlights.find((h) => h.id === id) ?? null)}
           onSelection={(s) => {
@@ -449,22 +631,36 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
             if (s) setMenu(false);
           }}
           onBrightness={setBrightness}
+          onFontSize={(v) => setReader({ fontSize: v })}
+          onFootnote={setFootnote}
+          selectMode={selectMode}
+          autoScroll={autoScroll && !menu && !sheet}
           onExternalLink={async (href) => {
             if (await confirmDialog("¿Abrir enlace externo?", href, "Abrir")) window.open(href, "_blank", "noopener");
           }}
         />
       ) : null}
 
-      {settings.showStatus && (
+      {settings.showStatus && !settings.miniStatus && (
         <div className="rd-status bottom">
-          <span>{pageLabel}</span>
+          <span className="ellipsis">{[settings.progressDisplay === "percent" ? pageLabel : "", printed, timeLeft].filter(Boolean).join(" · ")}</span>
           <span className="rd-clock">
             {clock.time}
             {clock.battery !== null && <span className="rd-batt"> · {clock.battery}%</span>}
           </span>
-          <span>{(percent * 100).toFixed(percent < 0.1 ? 1 : 0)}%</span>
+          <span>{progressText}</span>
         </div>
       )}
+      {settings.showStatus && settings.miniStatus && (
+        <div className="rd-status mini">
+          <span className="ellipsis">{[clock.time, timeLeft, printed].filter(Boolean).join(" · ")}</span>
+          <span>{progressText}</span>
+          <div className="rd-mini-bar" style={{ width: `${percent * 100}%` }} />
+        </div>
+      )}
+
+      <BlueLightFilter settings={settings} />
+      <ReadingRuler settings={settings} />
 
       {pageBookmark && <div className="rd-ribbon" aria-label="Página con marcador" />}
 
@@ -485,6 +681,12 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
           <div className="ellipsis rd-top-book">{book.title}</div>
           {book.author && <div className="ellipsis rd-top-author">{book.author}</div>}
         </div>
+        <button className="icon-btn" onClick={() => setSheet("edit")} aria-label="Vista de edición" disabled={!flow || !!flow.fixedLayout}>
+          <FileCode size={20} />
+        </button>
+        <button className="icon-btn" onClick={() => setSheet("info")} aria-label="Información del libro">
+          <Info size={21} />
+        </button>
         <button className="icon-btn" onClick={() => setSheet("search")} aria-label="Buscar">
           <Search size={21} />
         </button>
@@ -529,27 +731,16 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         {scrub !== null && (
           <ScrubCommit onCommit={() => onScrubEnd(scrub)} />
         )}
-        <div className="rd-actions">
-          <button className="rd-action" onClick={() => setSheet("toc")}>
-            <ListTree size={22} />
-            <span>Índice</span>
-          </button>
-          <button className="rd-action" onClick={() => setSheet("format")}>
-            <Type size={22} />
-            <span>Aspecto</span>
-          </button>
-          <button className="rd-action" onClick={toggleNight}>
-            {theme.dark ? <Sun size={22} /> : <Moon size={22} />}
-            <span>{theme.dark ? "Día" : "Noche"}</span>
-          </button>
-          <button className="rd-action" onClick={() => (ttsState.active ? setSheet("tts") : startTts())}>
-            <Headphones size={22} />
-            <span>Escuchar</span>
-          </button>
-          <button className="rd-action" onClick={() => void openRsvp()} disabled={!!flow?.fixedLayout}>
-            <Zap size={22} />
-            <span>Rápida</span>
-          </button>
+        <div className={`rd-actions ${settings.toolbarRows === 2 ? "two-rows" : ""}`}>
+          {settings.toolbarItems.map((id) => {
+            const t = tool(id);
+            return (
+              <button key={id} className={`rd-action ${t.active ? "active" : ""}`} onClick={t.run} disabled={t.disabled}>
+                {t.icon}
+                <span>{t.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -628,6 +819,57 @@ function Reader({ book, content }: { book: BookMeta; content: BookContent }) {
         stopTts();
         setSheet(null);
       }} />
+
+      <BookInfoSheet
+        open={sheet === "info"}
+        onClose={() => setSheet(null)}
+        book={book}
+        content={content}
+        percent={percent}
+        chapter={loc?.chapter ?? 0}
+        chapterFraction={content.kind === "pdf" && pdfPages ? 1 : loc?.displayFraction ?? 0}
+        sizes={sizes}
+        pages={null}
+      />
+
+      {flow && (
+        <EditViewSheet
+          open={sheet === "edit"}
+          onClose={() => setSheet(null)}
+          chapterTitle={chapterTitle(loc?.chapter ?? 0)}
+          getHtml={() => flow.getHtml(loc?.chapter ?? 0)}
+          onApply={(html) => {
+            const c = loc?.chapter ?? 0;
+            setOverrides((m) => new Map(m).set(c, html));
+            setSheet(null);
+          }}
+          onReset={() => {
+            const c = loc?.chapter ?? 0;
+            setOverrides((m) => {
+              const n = new Map(m);
+              n.delete(c);
+              return n;
+            });
+            setSheet(null);
+          }}
+        />
+      )}
+
+      <FootnoteSheet
+        note={footnote}
+        onClose={() => setFootnote(null)}
+        onGo={(n) => {
+          setFootnote(null);
+          viewRef.current?.goTo(n.anchor ? { chapter: n.chapter, anchor: n.anchor } : { chapter: n.chapter, fraction: 0 });
+        }}
+      />
+
+      <QuickAdjustSheet
+        kind={sheet === "brightness" || sheet === "fontSize" ? sheet : null}
+        onClose={() => setSheet(null)}
+        settings={settings}
+        onChange={setReader}
+      />
 
       <HighlightSheet highlight={editing} bookTitle={book.title} onClose={() => setEditing(null)} />
 

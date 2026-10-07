@@ -21,6 +21,10 @@
   --st-bottom: 30px;
 }
 
+.reader.with-mini-status {
+  --st-bottom: 18px;
+}
+
 .rd-view {
   position: absolute;
   inset: 0;
@@ -594,6 +598,31 @@
 
 .rd-action:active {
   background: var(--rd-soft);
+}
+
+.rd-action.active {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.rd-action:disabled {
+  opacity: 0.35;
+}
+
+/* Barra de herramientas en una línea (desplazable) o en dos líneas */
+.rd-actions:not(.two-rows) {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.rd-actions:not(.two-rows) .rd-action {
+  min-width: 64px;
+}
+
+.rd-actions.two-rows {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  row-gap: 2px;
 }
 
 /* Barra de lectura en voz alta */
@@ -1241,4 +1270,226 @@
   background: rgba(255, 255, 255, 0.14);
   color: #fff;
   box-shadow: none;
+}
+
+/* Mini barra de estado */
+.rd-status.mini {
+  bottom: var(--safe-bottom);
+  height: 18px;
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.rd-mini-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.7;
+}
+
+/* Recortar el espacio superior al empezar cada página/capítulo */
+.rd-view.trim-top .rd-content > :first-child,
+.rd-view.trim-top .rd-content > :first-child > :first-child {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.rd-view.trim-top .rd-content > br:first-child {
+  display: none;
+}
+
+/* Fuente elegida por el usuario salvo que se respeten las del libro */
+.rd-view:not(.pub-fonts) .rd-content [style*="font-family"] {
+  font-family: var(--rd-font) !important;
+}
+
+/* Notas al pie: emergentes o en línea (las notas del capítulo se ocultan) */
+.rd-view.fn-hide .rd-content [data-fn] {
+  display: none;
+}
+
+.rd-view.fn-inline .rd-content a[data-fn-text]::after {
+  content: " [" attr(data-fn-text) "]";
+  font-size: 0.82em;
+  color: var(--rd-muted);
+  font-style: italic;
+  vertical-align: baseline;
+}
+
+.footnote-body {
+  font-size: 16px;
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+/* Saltos de página de la edición impresa */
+.rd-content [data-pb] {
+  font-size: 0;
+}
+
+/* Lectura enfocada */
+.rd-content b.rd-bionic {
+  font-weight: 750;
+}
+
+.rd-content b.rd-first {
+  font-weight: 750;
+  color: color-mix(in srgb, var(--accent) 55%, var(--rd-fg));
+}
+
+/* Modo selección: arrastrar selecciona en vez de pasar página */
+.rd-view.select-mode {
+  touch-action: none;
+}
+
+/* Filtro de luz azul */
+.rd-bluefilter {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  z-index: 41;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+/* Regla de lectura */
+.rd-ruler {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 39;
+}
+
+.rd-ruler-shade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.rd-ruler-shade.top {
+  top: 0;
+  height: calc(var(--ruler-top) - var(--ruler-h) / 2);
+}
+
+.rd-ruler-shade.bottom {
+  bottom: 0;
+  top: calc(var(--ruler-top) + var(--ruler-h) / 2);
+}
+
+.rd-ruler-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(var(--ruler-top) - var(--ruler-h) / 2);
+  height: var(--ruler-h);
+  border-top: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-bottom: 1.5px solid color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.rd-ruler-grip {
+  position: absolute;
+  right: 0;
+  width: 26px;
+  height: 44px;
+  top: calc(var(--ruler-top) - 22px);
+  border-radius: 12px 0 0 12px;
+  background: var(--accent);
+  opacity: 0.75;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+/* Panel de información del libro */
+.info-sheet .info-title {
+  font-size: 22px;
+  margin: 0 0 4px;
+}
+
+.info-desc {
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.85;
+  max-height: 9em;
+  overflow-y: auto;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.info-grid dt {
+  color: var(--text-2, inherit);
+  opacity: 0.7;
+}
+
+.info-grid dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.info-history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.info-history :is(th, td) {
+  text-align: left;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line, rgba(127, 127, 127, 0.2));
+}
+
+.info-history th {
+  font-weight: 650;
+  opacity: 0.7;
+}
+
+/* Vista de edición */
+.edit-view {
+  width: 100%;
+  height: 56dvh;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.3));
+  background: var(--surface-2, transparent);
+  color: inherit;
+  resize: vertical;
+}
+
+/* Tema personal */
+.custom-theme {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 10px 0 4px;
+}
+
+.custom-color {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.custom-color input[type="color"] {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 10px;
+  padding: 0;
+  background: none;
 }

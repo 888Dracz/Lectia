@@ -62,7 +62,9 @@ export async function createBackup(
   flushSave();
   const state = getPersisted();
   const now = Date.now();
-  const json = buildBackupJson({ ...state, app: { ...state.app, lastBackupAt: now } }, includeFiles, now);
+  // Las credenciales de sincronización no viajan en el respaldo.
+  const app = { ...state.app, lastBackupAt: now, sync: { ...state.app.sync, password: "", token: "" } };
+  const json = buildBackupJson({ ...state, app }, includeFiles, now);
   const files: Zippable = {
     "lectia.json": [strToU8(JSON.stringify(json, null, 1)), { level: 6 }],
     "LEEME.txt": [
@@ -215,4 +217,33 @@ export async function deliverFile(file: File, preferShare = false): Promise<"sha
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30000);
   return "downloaded";
+}
+
+/** Copia solo de los ajustes (lector y app, con el diccionario), en un .json. */
+export function createSettingsBackup(): File {
+  const s = getPersisted();
+  const data = {
+    app: "lectia-ajustes",
+    format: 1,
+    exportedAt: Date.now(),
+    reader: s.reader,
+    settings: { ...s.app, sync: { ...s.app.sync, password: "", token: "" } },
+  };
+  return new File([JSON.stringify(data, null, 1)], `lectia-ajustes-${dayKey()}.json`, { type: "application/json" });
+}
+
+export async function restoreSettingsBackup(file: Blob): Promise<void> {
+  let raw: { app?: string; reader?: unknown; settings?: Record<string, unknown> };
+  try {
+    raw = JSON.parse(await file.text());
+  } catch {
+    throw new Error("El archivo de ajustes está dañado.");
+  }
+  if (raw?.app !== "lectia-ajustes") throw new Error("Este archivo no es una copia de ajustes de Lectia.");
+  const cur = getPersisted();
+  // Se conservan las credenciales y la fecha de respaldo de este dispositivo.
+  const settings = { ...(raw.settings ?? {}), sync: { ...cur.app.sync, ...((raw.settings?.sync as object) ?? {}), password: cur.app.sync.password, token: cur.app.sync.token }, lastBackupAt: cur.app.lastBackupAt };
+  const next = migrateState({ ...cur, reader: raw.reader as PersistedState["reader"], app: settings as unknown as PersistedState["app"] });
+  useStore.getState().replaceState({ ...cur, reader: next.reader, app: next.app });
+  flushSave();
 }

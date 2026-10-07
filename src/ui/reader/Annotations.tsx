@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { Highlight, HighlightColor } from "../../store/state";
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
+import { choiceDialog, promptDialog } from "../components/Dialog";
 import { Sheet } from "../components/Sheet";
 import type { SelectionInfo } from "./ReflowView";
 import { HIGHLIGHT_COLORS } from "./themes";
@@ -18,10 +19,28 @@ async function copy(text: string) {
   }
 }
 
-function define(text: string) {
+/** Busca primero en el diccionario propio; si no está, ofrece agregarla o buscarla en línea. */
+export async function define(text: string) {
   const word = text.trim().split(/\s+/)[0].replace(/[^\p{L}-]/gu, "").toLowerCase();
   if (!word) return;
-  window.open(`https://dle.rae.es/${encodeURIComponent(word)}`, "_blank", "noopener");
+  const store = useStore.getState();
+  const dict = store.app.dictionary;
+  const entry = dict.find((d) => d.word === word);
+  const online = () => window.open(`https://dle.rae.es/${encodeURIComponent(word)}`, "_blank", "noopener");
+  const edit = async () => {
+    const def = await promptDialog(`Definición de “${word}”`, entry?.definition ?? "", "Escribe tu definición");
+    if (def === null) return;
+    const rest = dict.filter((d) => d.word !== word);
+    store.setApp({ dictionary: def.trim() ? [...rest, { word, definition: def.trim(), createdAt: Date.now() }] : rest });
+    toast(def.trim() ? "Guardado en tu diccionario" : "Quitado del diccionario", { tone: "success" });
+  };
+  const buttons = [
+    ...(store.app.onlineDictionary ? [{ label: "Buscar en línea", value: "online" }] : []),
+    { label: entry ? "Editar" : "Agregar a mi diccionario", value: "edit", tone: "primary" as const },
+  ];
+  const choice = await choiceDialog(word, entry ? entry.definition : "No está en tu diccionario personal.", buttons);
+  if (choice === "online") online();
+  else if (choice === "edit") await edit();
 }
 
 async function share(text: string, title: string) {
@@ -86,7 +105,7 @@ export function SelectionMenu({
         <span>Copiar</span>
       </button>
       {sel.text.split(/\s+/).length <= 3 && (
-        <button className="sel-btn" onClick={() => define(sel.text)} aria-label="Definir">
+        <button className="sel-btn" onClick={() => void define(sel.text)} aria-label="Definir">
           <BookA size={19} />
           <span>Definir</span>
         </button>
