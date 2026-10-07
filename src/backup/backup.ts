@@ -202,6 +202,8 @@ export function mergeStates(current: PersistedState, incoming: PersistedState): 
       totalRsvpWords: Math.max(current.progress.totalRsvpWords, incoming.progress.totalRsvpWords),
       bestRsvpWpm: Math.max(current.progress.bestRsvpWpm, incoming.progress.bestRsvpWpm),
       booksFinished: Math.max(current.progress.booksFinished, incoming.progress.booksFinished),
+      freezes: Math.max(current.progress.freezes, incoming.progress.freezes),
+      frozenDays: [...new Set([...current.progress.frozenDays, ...incoming.progress.frozenDays])].sort(),
     },
   };
 }

@@ -1,4 +1,4 @@
-import { BookA, Copy, Image, NotebookPen, Share2, Trash2 } from "lucide-react";
+import { BookA, Copy, Image, NotebookPen, Send, Share2, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { capitalize } from "../../lib/util";
 import { HIGHLIGHT_COLOR_IDS, HIGHLIGHT_COLORS, MARK_STYLES, markStyleInfo } from "../../notes/marks";
@@ -6,6 +6,7 @@ import type { Highlight, HighlightColor, MarkStyle } from "../../store/state";
 import { useStore } from "../../store/store";
 import { toast } from "../../store/ui";
 import { choiceDialog, promptDialog } from "../components/Dialog";
+import { openShare } from "../community/ShareSheet";
 import { Sheet } from "../components/Sheet";
 import type { SelectionInfo } from "./ReflowView";
 
@@ -239,6 +240,16 @@ export function HighlightSheet({
                 <Image size={16} /> Tarjeta
               </button>
             )}
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                if (note !== h.note) update(h.id, { note: note.trim() });
+                onClose();
+                openShare({ kind: "quote", highlightId: h.id });
+              }}
+            >
+              <Send size={16} /> A mis amigos
+            </button>
             <span className="spacer" />
             <button
               className="btn btn-sm btn-danger"

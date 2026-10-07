@@ -2,7 +2,9 @@
 import { addDays, dayKey, parseDayKey } from "../lib/util";
 import type { BookMeta } from "../books/types";
 import { defaultNotebookName } from "../notes/notebook";
-import type { DayStats, PersistedState } from "./state";
+import { MAX_FREEZES, type DayStats, type PersistedState, type Progress } from "./state";
+
+export { MAX_FREEZES };
 
 export const RANKS = [
   { from: 1, name: "Chispa", emoji: "✨" },
@@ -50,27 +52,84 @@ export function dayCounts(d: DayStats | undefined): boolean {
   return !!d && (d.ms >= 60000 || d.games > 0 || d.rsvpWords >= 100);
 }
 
-export function computeStreak(days: Record<string, DayStats>, today = new Date()): { current: number; best: number; todayDone: boolean } {
+/**
+ * Racha de días seguidos. Los días cubiertos por un protector (`frozen`) no
+ * suman, pero tampoco la cortan.
+ */
+export function computeStreak(
+  days: Record<string, DayStats>,
+  today = new Date(),
+  frozen: readonly string[] = []
+): { current: number; best: number; todayDone: boolean } {
+  const fz = new Set(frozen);
   const todayDone = dayCounts(days[dayKey(today)]);
   let current = 0;
   let cursor = todayDone ? today : addDays(today, -1);
-  while (dayCounts(days[dayKey(cursor)])) {
-    current++;
+  for (;;) {
+    const k = dayKey(cursor);
+    if (dayCounts(days[k])) current++;
+    else if (!fz.has(k)) break;
     cursor = addDays(cursor, -1);
   }
   // Mejor racha histórica
-  const keys = Object.keys(days).filter((k) => dayCounts(days[k])).sort();
+  const keys = [...new Set([...Object.keys(days).filter((k) => dayCounts(days[k])), ...fz])].sort();
   let best = 0;
   let run = 0;
-  let prev: Date | null = null;
+  let prev: string | null = null;
   for (const k of keys) {
-    const d = parseDayKey(k);
-    run = prev && dayKey(addDays(prev, 1)) === k ? run + 1 : 1;
+    if (!prev || dayKey(addDays(parseDayKey(prev), 1)) !== k) run = 0;
+    if (dayCounts(days[k])) run++;
     best = Math.max(best, run);
-    prev = d;
+    prev = k;
   }
   return { current, best: Math.max(best, current), todayDone };
 }
+
+/** Racha a partir del progreso guardado (con sus protectores). */
+export function streakOf(progress: Pick<Progress, "days" | "frozenDays">, today = new Date()) {
+  return computeStreak(progress.days, today, progress.frozenDays);
+}
+
+/** Último día que cuenta para la racha (leído o protegido). */
+export function lastActiveDay(progress: Pick<Progress, "days" | "frozenDays">): string | null {
+  let last: string | null = null;
+  for (const k of Object.keys(progress.days)) if (dayCounts(progress.days[k]) && (!last || k > last)) last = k;
+  for (const k of progress.frozenDays) if (!last || k > last) last = k;
+  return last;
+}
+
+/**
+ * Usa protectores para cubrir los días sin lectura entre la racha y hoy.
+ * Si faltan más días que protectores, la racha ya se perdió y no se gasta nada.
+ */
+export function applyFreezes(
+  days: Record<string, DayStats>,
+  frozen: readonly string[],
+  freezes: number,
+  today = new Date()
+): { frozen: string[]; freezes: number; used: string[] } {
+  const none = { frozen: [...frozen], freezes, used: [] as string[] };
+  if (freezes <= 0) return none;
+  const fz = new Set(frozen);
+  const active = (k: string) => dayCounts(days[k]) || fz.has(k);
+  const missing: string[] = [];
+  let cursor = addDays(today, -1);
+  while (!active(dayKey(cursor))) {
+    missing.push(dayKey(cursor));
+    if (missing.length > freezes) return none;
+    cursor = addDays(cursor, -1);
+  }
+  if (!missing.length) return none;
+  return { frozen: [...frozen, ...missing].sort(), freezes: freezes - missing.length, used: missing.sort() };
+}
+
+/** Se gana un protector cada 7 días de racha (hasta MAX_FREEZES). */
+export function earnsFreeze(streak: number, freezes: number): boolean {
+  return streak > 0 && streak % 7 === 0 && freezes < MAX_FREEZES;
+}
+
+/** Rachas que se celebran en la comunidad. */
+export const STREAK_MILESTONES = [7, 14, 30, 50, 100, 150, 200, 250, 300, 365, 500, 730, 1000];
 
 export interface Quest {
   id: string;

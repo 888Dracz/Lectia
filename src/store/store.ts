@@ -5,12 +5,16 @@ import { deleteCover, deleteFile, deleteMedia, getKV, setKV } from "../lib/db";
 import { findWishFor, isActiveItem, moveActive } from "../notes/readingList";
 import { resolveNotebook, type EntryKind } from "../notes/notebook";
 import { dayKey, debounce, uid } from "../lib/util";
+import { emitStoreEvent } from "./events";
 import {
   ACHIEVEMENTS,
-  computeStreak,
+  applyFreezes,
   dailyQuests,
+  dayCounts,
+  earnsFreeze,
   levelFromXp,
   newlyUnlocked,
+  streakOf,
   XP_PER_MINUTE,
 } from "./gamification";
 import {
@@ -21,6 +25,7 @@ import {
   type Bookmark,
   type Clip,
   type Collection,
+  type CommunitySettings,
   type DayStats,
   type Drawing,
   type GameId,
@@ -74,6 +79,9 @@ interface Actions {
   removeReadingItem: (id: string) => void;
   setReader: (patch: Partial<ReaderSettings>) => void;
   setApp: (patch: Partial<AppSettings>) => void;
+  setCommunity: (patch: Partial<CommunitySettings> | ((c: CommunitySettings) => Partial<CommunitySettings>)) => void;
+  /** Usa protectores de racha si ayer (o antes) no se leyó. */
+  ensureFreezes: () => void;
   logReading: (bookId: string, ms: number, pages: number, percent?: number) => void;
   /** Anota el avance del día del libro (para su historial). */
   notePercent: (bookId: string, percent: number) => void;
@@ -104,8 +112,12 @@ function persistedOf(s: Store): PersistedState {
     reader: s.reader,
     app: s.app,
     progress: s.progress,
+    community: s.community,
   };
 }
+
+/** Día cuya racha ya se anunció (para avisar una sola vez al cumplirlo). */
+let streakDayAnnounced = "";
 
 export const useStore = create<Store>((set, get) => {
   const updateDay = (fn: (d: DayStats) => DayStats) => {
@@ -138,6 +150,20 @@ export const useStore = create<Store>((set, get) => {
     for (const x of list) if (x.mediaId) void deleteMedia(x.mediaId).catch(() => undefined);
   };
 
+  /** Al cumplir por primera vez el día: avisa la racha y quizá da un protector. */
+  const checkStreakDay = () => {
+    const key = dayKey();
+    if (streakDayAnnounced === key || !dayCounts(get().progress.days[key])) return;
+    streakDayAnnounced = key;
+    const p = get().progress;
+    const streak = streakOf(p).current;
+    if (earnsFreeze(streak, p.freezes) && p.freezeAwardDay !== key) {
+      set({ progress: { ...p, freezes: p.freezes + 1, freezeAwardDay: key } });
+      useUi.getState().toast({ text: `¡${streak} días de racha! Ganaste un protector de racha`, icon: "🧊", tone: "success" }, 4500);
+    }
+    emitStoreEvent({ type: "streak-day", streak });
+  };
+
   return {
     ...defaultState(),
     hydrated: false,
@@ -149,6 +175,8 @@ export const useStore = create<Store>((set, get) => {
       } catch {
         set({ hydrated: true });
       }
+      if (dayCounts(get().progress.days[dayKey()])) streakDayAnnounced = dayKey();
+      get().ensureFreezes();
     },
 
     replaceState: (s) => set({ ...migrateState(s) }),
@@ -226,6 +254,7 @@ export const useStore = create<Store>((set, get) => {
         }
         get().addXp(100, "¡Libro terminado!");
         useUi.getState().celebrate({ kind: "achievement", title: "¡Libro terminado!", subtitle: b.title, icon: "🏁" });
+        emitStoreEvent({ type: "book-finished", bookId: id });
         get().checkAchievements();
       } else if (!finished && wasFinished) {
         const p = get().progress;
@@ -391,6 +420,27 @@ export const useStore = create<Store>((set, get) => {
       if (patch.lastBackupAt) get().checkAchievements();
     },
 
+    setCommunity: (patch) => {
+      const c = get().community;
+      set({ community: { ...c, ...(typeof patch === "function" ? patch(c) : patch) } });
+    },
+
+    ensureFreezes: () => {
+      const p = get().progress;
+      const r = applyFreezes(p.days, p.frozenDays, p.freezes);
+      if (!r.used.length) return;
+      const next = { ...p, frozenDays: r.frozen, freezes: r.freezes };
+      set({ progress: next });
+      const streak = streakOf(next).current;
+      useUi
+        .getState()
+        .toast(
+          { text: `${r.used.length === 1 ? "Un protector salvó" : `${r.used.length} protectores salvaron`} tu racha de ${streak} ${streak === 1 ? "día" : "días"}`, icon: "🧊", tone: "success" },
+          5000
+        );
+      emitStoreEvent({ type: "freeze-used", days: r.used.length, streak });
+    },
+
     notePercent: (bookId, percent) => {
       const b = get().books[bookId];
       if (!b) return;
@@ -421,6 +471,7 @@ export const useStore = create<Store>((set, get) => {
       if (ms > 0 && h < 5) get().unlock("night-owl");
       if (ms > 0 && h >= 5 && h < 7) get().unlock("early-bird");
       checkQuests();
+      checkStreakDay();
       get().checkAchievements();
     },
 
@@ -436,6 +487,7 @@ export const useStore = create<Store>((set, get) => {
       if (game !== "rsvp") updateDay((d) => ({ ...d, games: d.games + 1 }));
       if (xp > 0) get().addXp(xp);
       checkQuests();
+      checkStreakDay();
       get().checkAchievements();
     },
 
@@ -452,6 +504,7 @@ export const useStore = create<Store>((set, get) => {
       updateDay((d) => ({ ...d, rsvpWords: d.rsvpWords + words, words: d.words + words, ms: d.ms + ms }));
       get().addXp(Math.max(1, Math.round(words / 50)));
       checkQuests();
+      checkStreakDay();
       get().checkAchievements();
     },
 
@@ -475,6 +528,7 @@ export const useStore = create<Store>((set, get) => {
           subtitle: `Ahora eres ${info.rank.name} ${info.rank.emoji}`,
           icon: info.rank.emoji,
         });
+        emitStoreEvent({ type: "level", level: info.level });
       }
     },
 
@@ -485,6 +539,7 @@ export const useStore = create<Store>((set, get) => {
       const p = get().progress;
       set({ progress: { ...p, achievements: { ...p.achievements, [id]: Date.now() } } });
       useUi.getState().celebrate({ kind: "achievement", title: a.title, subtitle: a.description, icon: a.icon });
+      emitStoreEvent({ type: "achievement", id });
       get().addXp(a.xp);
     },
 
@@ -493,7 +548,7 @@ export const useStore = create<Store>((set, get) => {
       const ctx = {
         state: persistedOf(s),
         books: Object.values(s.books),
-        streak: computeStreak(s.progress.days).current,
+        streak: streakOf(s.progress).current,
       };
       for (const a of newlyUnlocked(ctx)) get().unlock(a.id);
     },
@@ -522,7 +577,8 @@ useStore.subscribe((s, prev) => {
     s.readingList !== prev.readingList ||
     s.reader !== prev.reader ||
     s.app !== prev.app ||
-    s.progress !== prev.progress
+    s.progress !== prev.progress ||
+    s.community !== prev.community
   ) {
     save();
   }
@@ -537,6 +593,8 @@ export function flushSave(): void {
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flushSave();
+    // Si la app queda abierta de un día para otro, se revisan los protectores.
+    else if (useStore.getState().hydrated) useStore.getState().ensureFreezes();
   });
   window.addEventListener("pagehide", flushSave);
 }

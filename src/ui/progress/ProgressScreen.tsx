@@ -1,7 +1,7 @@
 import { Flame, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { addDays, dayKey, formatDate, formatHours, formatNumber } from "../../lib/util";
-import { ACHIEVEMENTS, computeStreak, dailyQuests, levelFromXp } from "../../store/gamification";
+import { ACHIEVEMENTS, dailyQuests, levelFromXp, MAX_FREEZES, streakOf } from "../../store/gamification";
 import { useStore } from "../../store/store";
 import { Bar, Ring } from "../components/controls";
 import { Sheet } from "../components/Sheet";
@@ -16,7 +16,7 @@ export function ProgressScreen() {
   const [achOpen, setAchOpen] = useState<string | null>(null);
 
   const lvl = levelFromXp(progress.xp);
-  const streak = computeStreak(progress.days);
+  const streak = streakOf(progress);
   const today = progress.days[dayKey()];
   const todayMin = Math.floor((today?.ms ?? 0) / 60000);
   const totalMs = Object.values(progress.days).reduce((a, d) => a + d.ms, 0);
@@ -89,6 +89,14 @@ export function ProgressScreen() {
           <div className="streak-num">{streak.current}</div>
           <div className="streak-label">{streak.current === 1 ? "día seguido" : "días seguidos"}</div>
           <div className="faint streak-best">Mejor racha: {streak.best}</div>
+          <div className="streak-freezes" title="Protectores de racha: salvan tu racha si un día no lees. Ganas uno cada 7 días de racha.">
+            {Array.from({ length: MAX_FREEZES }, (_, i) => (
+              <span key={i} className={i < progress.freezes ? "on" : ""}>
+                🧊
+              </span>
+            ))}
+            <span className="faint">protectores</span>
+          </div>
         </div>
       </div>
 

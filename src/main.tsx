@@ -25,7 +25,9 @@ import "./styles/progress.css";
 import "./styles/notes.css";
 import "./styles/notebook.css";
 import "./styles/readinglist.css";
+import "./styles/community.css";
 import { App } from "./App";
+import { setupCommunity } from "./community/store";
 import { consumeSharedFiles, setupPwa } from "./pwa";
 import { useStore } from "./store/store";
 import { runSync } from "./sync/sync";
@@ -43,6 +45,7 @@ void useStore
   .then(() => {
     useStore.getState().checkAchievements();
     autoSync("both");
+    setupCommunity();
     return consumeSharedFiles();
   });
 

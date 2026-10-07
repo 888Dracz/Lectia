@@ -16,6 +16,7 @@ import {
   Smartphone,
   Target,
   Trash,
+  Trophy,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createBackup, createSettingsBackup, deliverFile, markBackupDone, readBackup, restoreBackup, restoreSettingsBackup } from "../../backup/backup";
@@ -30,6 +31,7 @@ import { toast, useUi } from "../../store/ui";
 import { Range, Segmented, Switch } from "../components/controls";
 import { choiceDialog, confirmDialog } from "../components/Dialog";
 import { pickFiles } from "../library/importFlow";
+import { navigate } from "../../lib/router";
 import { installPrompt, useInstallAvailable } from "../../pwa";
 
 const ACCENTS = [
@@ -439,6 +441,21 @@ export function SettingsScreen() {
             </span>
             <Switch on={app.onlineDictionary} onChange={(v) => setApp({ onlineDictionary: v })} />
           </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-title">Comunidad</div>
+        <div className="list">
+          <button className="list-item" onClick={() => navigate({ name: "profile" })}>
+            <span className="li-icon">
+              <Trophy size={18} />
+            </span>
+            <span className="li-main">
+              <div className="li-title">Mi perfil y privacidad</div>
+              <div className="li-sub">Qué compartes con tus amigos, cuenta y correo</div>
+            </span>
+          </button>
         </div>
       </section>
 

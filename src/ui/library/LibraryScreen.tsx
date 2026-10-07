@@ -20,7 +20,7 @@ import { FORMAT_LABEL, type BookMeta } from "../../books/types";
 import { navigate } from "../../lib/router";
 import { fold } from "../../lib/text";
 import { dayKey, formatRelative, greeting } from "../../lib/util";
-import { computeStreak, levelFromXp } from "../../store/gamification";
+import { levelFromXp, streakOf } from "../../store/gamification";
 import type { LibrarySort, LibraryView } from "../../store/state";
 import { useStore } from "../../store/store";
 import { Cover } from "../components/Cover";
@@ -103,7 +103,7 @@ export function LibraryScreen() {
     return sortBooks(list, app.librarySort);
   }, [all, filter, query, app.librarySort]);
 
-  const streak = computeStreak(progress.days);
+  const streak = streakOf(progress);
   const today = progress.days[dayKey()];
   const todayMin = Math.floor((today?.ms ?? 0) / 60000);
   const lvl = levelFromXp(progress.xp);

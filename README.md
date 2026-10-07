@@ -93,9 +93,26 @@ más (PWA).
 - **Polvo de hadas** ✨ (experiencia), niveles y rangos, **racha** de días, meta diaria,
   retos del día y **29 logros**.
 
+### 🏆 Comunidad (estilo Duolingo)
+- **Perfil** con avatar, color, @usuario, géneros favoritos, libro y autores
+  favoritos, momento de lectura y meta de libros del año.
+- **Ligas semanales por divisiones**: compites con hasta 30 lectores; los
+  primeros suben y los últimos bajan, de Bronce a Diamante.
+- **Rachas de amigos**: días seguidos en que los dos leyeron, y la racha de
+  cada persona visible en su perfil, la liga y el ranking.
+- **Ranking semanal de amigos**, solicitudes de amistad y enlace para invitar.
+- **Novedades con "me gusta"**: libros terminados y recomendados (con
+  estrellas), citas con tu nota, rachas, logros y ascensos de liga.
+- **Nada de chats ni comentarios**: la única interacción es la amistad y el
+  "me gusta". Lo que compartes solo lo ven tus amigos y los archivos de tus
+  libros nunca salen del teléfono.
+- Funciona con [Supabase](supabase/README.md); sin configurarlo, la app muestra
+  una **demostración** con lectores de ejemplo.
+
 ### 📈 Progreso
-Nivel, meta diaria, racha, retos, gráfico de la semana, calendario de lectura,
-totales y evolución de tu velocidad.
+Nivel, meta diaria, racha con **protectores de racha** 🧊 (se gana uno cada 7
+días), retos, gráfico de la semana, calendario de lectura, totales y evolución
+de tu velocidad.
 
 ### 🛟 Respaldo
 En **Ajustes → Respaldo**:
@@ -114,9 +131,10 @@ En **Ajustes → Respaldo**:
   nunca se incluyen en los respaldos.
 - Al recibir un libro desde otra app se pide confirmación (“Guardar archivo de libro”).
 
-> Todo se guarda **solo en tu dispositivo** (IndexedDB). Haz respaldos de vez en
-> cuando: si se borran los datos del navegador, la biblioteca solo se recupera
-> desde un respaldo.
+> Tus libros, notas y progreso se guardan **solo en tu dispositivo** (IndexedDB).
+> Haz respaldos de vez en cuando: si se borran los datos del navegador, la
+> biblioteca solo se recupera desde un respaldo. La comunidad guarda en el
+> servidor solo tu perfil, tu actividad diaria, tus amistades y lo que compartes.
 
 ## Instalar en el celular
 
@@ -134,6 +152,7 @@ Requiere Node 22.
 npm install
 npm run dev        # servidor de desarrollo (http://localhost:5173)
 npm test           # pruebas (vitest)
+npm run test:sql   # pruebas de la base de datos de la comunidad (Postgres 16)
 npm run build      # typecheck + build de producción en dist/
 npm run preview    # sirve el build en http://localhost:4173/lectia/
 ```
@@ -144,6 +163,7 @@ npm run preview    # sirve el build en http://localhost:4173/lectia/
 src/
   books/          # Formatos: epub, pdf (pdf.js), docx (mammoth), txt/md, html, fb2, cbz
   backup/         # Respaldo y restauración (.zip con fflate)
+  community/      # Comunidad: API (Supabase o demostración), ligas, rachas, sincronización
   games/          # Lógica de lectura rápida y generadores de minijuegos
   lib/            # IndexedDB, utilidades de texto, navegación y botón "atrás"
   notes/          # Cuadernos, remarcados, trazos (formas), recortes, tarjetas y lista por leer
@@ -154,15 +174,22 @@ src/
     notebook/     # Cuadernos de notas y pestaña Cuadernos
     readinglist/  # Lista por leer (arrastrar para ordenar)
     games/        # Pantalla Entrenar y minijuegos
+    community/    # Liga, amigos, novedades, perfiles y cuenta
     progress/     # Estadísticas y logros
     settings/     # Ajustes y respaldo
   sw.ts           # Service worker: sin conexión + "Compartir → Lectia"
   styles/         # Sistema de diseño (temas claro/oscuro, colores de acento)
+supabase/
+  migrations/     # Base de datos de la comunidad (tablas, funciones y permisos)
+  tests/          # Pruebas SQL
 ```
 
+Para activar la comunidad real sigue [supabase/README.md](supabase/README.md).
+
 Las pruebas cubren los formatos (EPUB, TXT, Markdown, FB2, HTML, PDF), los
-minijuegos, la lectura rápida, los niveles y rachas, el respaldo, los cuadernos,
-el reconocimiento de formas de los trazos y la lista por leer.
+minijuegos, la lectura rápida, los niveles, rachas y protectores, el respaldo, los cuadernos,
+el reconocimiento de formas de los trazos, la lista por leer, las ligas, las rachas de
+amigos y la base de datos de la comunidad.
 
 ### Publicación
 
