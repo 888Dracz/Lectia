@@ -34,7 +34,7 @@ export default defineConfig(({ command, isPreview }) => {
         filename: "sw.ts",
         registerType: "autoUpdate",
         injectRegister: false,
-        includeAssets: ["icon.svg", "apple-touch-icon.png"],
+        includeAssets: ["favicon.png", "apple-touch-icon.png"],
         manifest: {
           id: base,
           name: "Lectia · Lector",
@@ -53,7 +53,6 @@ export default defineConfig(({ command, isPreview }) => {
             { src: "icon-192.png", sizes: "192x192", type: "image/png" },
             { src: "icon-512.png", sizes: "512x512", type: "image/png" },
             { src: "icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-            { src: "icon.svg", sizes: "any", type: "image/svg+xml" },
           ],
           share_target: {
             action: `${base}compartir`,

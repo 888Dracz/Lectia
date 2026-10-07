@@ -514,7 +514,7 @@ function EmptyLibrary({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="empty">
       <div className="empty-art">
-        <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" className="empty-icon" />
+        <img src={`${import.meta.env.BASE_URL}icon-512.png`} alt="" className="empty-icon" />
         <span className="twinkle t1">✦</span>
         <span className="twinkle t2">✧</span>
         <span className="twinkle t3">✦</span>
